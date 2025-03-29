@@ -13,3 +13,4 @@ geos
 reverse_geocoder
 matplotlib
 hapless
+ipykernel
