@@ -1,0 +1,15 @@
+joblib
+wandb
+hydra-core
+numpy
+scipy
+pandas
+scikit-learn
+pytorch-lightning
+transformers
+accelerate
+peft
+geos
+reverse_geocoder
+matplotlib
+hapless
