@@ -1,18 +1,17 @@
 import os
-import json
-import random
 import datetime
 import torch
-import numpy as np
 import pandas as pd
 from random import shuffle
 from PIL import Image 
 from typing import Tuple, Any
-from datasets import DatasetDict
 from transformers import CLIPProcessor
 from torchvision.transforms import transforms
+from warnings import filterwarnings
 
-clip_processor = CLIPProcessor.from_pretrained('openai/clip-vit-base-patch32')
+filterwarnings('ignore', category=FutureWarning, module='transformers')
+
+clip_processor = CLIPProcessor.from_pretrained('openai/clip-vit-base-patch32', use_fast=False)
 
 climate_dict = {
     0: 'Tropical, rainforest',
@@ -209,3 +208,171 @@ class PretrainDatasetOSVMini(torch.utils.data.Dataset):
 # print(f'caption: {caption}')
 # img.show()
 # print(f'image size: {img.size}')
+
+def read_unique_values(filepath: str) -> list:
+    """Read unique values from a file, one value per line.
+    
+    Args:
+        filepath (str): Path to file containing unique values
+        
+    Returns:
+        list: Sorted list of unique values
+    """
+    with open(filepath, 'r') as f:
+        values = [line.strip() for line in f.readlines()]
+    return sorted(values)
+
+class CLIPGeolocationDataset(torch.utils.data.Dataset):
+    def __init__(self, split: str, dir: str, unique_cities_file: str, unique_counties_file: str,
+                 shuffle: bool=True, image_size: int=224):
+        """Initialize the dataset.
+        
+        Args:
+            split (str): Dataset split to load ('train', 'val', or 'test')
+            dir (str): Path to parent directory containing the dataset
+            unique_cities_file (str): Path to file containing unique city names
+            unique_counties_file (str): Path to file containing unique county names
+            shuffle (bool): Whether to shuffle the data
+            image_size (int): Size to resize images to
+        """
+        self.split = split
+        self.shuffle = shuffle
+        self.image_size = image_size
+        self.dir = dir
+        self.image_dir = os.path.join(dir, f'{split}_images')
+        self.csv_path = os.path.join(dir, f'{split}_mini.csv')
+
+        # Basic checks
+        assert split in ['train', 'val', 'test']
+        assert os.path.exists(dir)
+        assert os.path.exists(self.csv_path), f"CSV file does not exist: {self.csv_path}"
+        assert os.path.exists(self.image_dir), f"Image directory does not exist: {self.image_dir}"
+        assert os.path.exists(unique_cities_file), f"Cities file does not exist: {unique_cities_file}"
+        assert os.path.exists(unique_counties_file), f"Counties file does not exist: {unique_counties_file}"
+        
+        # Load unique values
+        self.unique_cities = read_unique_values(unique_cities_file)
+        self.unique_counties = read_unique_values(unique_counties_file)
+        
+        # Load and preprocess data
+        self.df = pd.read_csv(self.csv_path)
+        self.df.drop(columns=["creator_username", "creator_id", 'thumb_original_url', 'sequence', 
+                            "road_index", 'drive_side', 'soil'], inplace=True)
+        self.df = self.df.rename(columns={'region': 'state'})
+        
+        # Convert month to 0-based index (1-12 -> 0-11) using epoch timestamp
+        self.df['month'] = self.df['captured_at'].apply(
+            lambda x: int(datetime.datetime.fromtimestamp(x/1000).strftime("%m")) - 1
+        )
+        
+        # Ensure all required columns exist
+        required_columns = ['id', 'state', 'unique_sub-region', 'unique_city', 'climate', 'month', 
+                          'latitude', 'longitude']
+        missing_columns = [col for col in required_columns if col not in self.df.columns]
+        if missing_columns:
+            raise ValueError(f"Missing required columns: {missing_columns}")
+        
+        # Create label mappings using provided unique values
+        self.state_to_idx = {state: idx for idx, state in enumerate(sorted(self.df['state'].unique()))}
+        self.county_to_idx = {county: idx for idx, county in enumerate(self.unique_counties)}
+        self.city_to_idx = {city: idx for idx, city in enumerate(self.unique_cities)}
+        
+        # Convert categorical labels to indices
+        self.df['state_idx'] = self.df['state'].map(self.state_to_idx)
+        self.df['county_idx'] = self.df['unique_sub-region'].map(self.county_to_idx)
+        self.df['city_idx'] = self.df['unique_city'].map(self.city_to_idx)
+        
+        if shuffle:
+            self.df = self.df.sample(frac=1.0, random_state=330)
+            
+        print(f'Initialized {split} dataset with {len(self.df)} samples')
+        print(f'Number of unique states: {len(self.state_to_idx)}')
+        print(f'Number of unique counties: {len(self.unique_counties)}')
+        print(f'Number of unique cities: {len(self.unique_cities)}')
+    
+    def _crop_resize(self, image: Image.Image) -> Image.Image:
+        """Crop and resize image to square."""
+        width, height = image.size
+        new_dim = min(width, height)
+        left = (width - new_dim) / 2
+        top = (height - new_dim) / 2
+        right = (width + new_dim) / 2
+        bottom = (height + new_dim) / 2
+        image = image.crop((left, top, right, bottom))
+        return image.resize((self.image_size, self.image_size))
+    
+    def _generate_caption(self, row: pd.Series) -> str:
+        """Generate caption for CLIP training."""
+        # Convert epoch timestamp to month name
+        month = datetime.datetime.fromtimestamp(row['captured_at']/1000).strftime("%B")
+        climate = climate_dict[int(row['climate'])]
+        
+        caption = (
+            f"Location: A photo in {row['city']} city, {row['sub-region']} county, "
+            f"{row['state']} state. Climate: This location has a {climate} climate. "
+            f"Month: This photo was taken in {month}."
+        )
+        return caption
+    
+    def __getitem__(self, index: int) -> dict:
+        """Get a single item from the dataset.
+        
+        Returns:
+            dict: Dictionary containing:
+                - pixel_values: Image tensor
+                - input_ids: Text input IDs
+                - attention_mask: Text attention mask
+                - climate_labels: Climate classification label
+                - month_labels: Month classification label
+                - state_labels: State classification label
+                - county_labels: County classification label
+                - city_labels: City classification label
+                - lat_labels: Latitude value
+                - lng_labels: Longitude value
+        """
+        row = self.df.iloc[index]
+        
+        # Load and preprocess image
+        image_path = os.path.join(self.image_dir, row['state'], f"{row['id']}.jpg")
+        image = Image.open(image_path).convert('RGB')
+        image = self._crop_resize(image)
+        
+        # Generate caption
+        caption = self._generate_caption(row)
+        
+        # Process text with CLIP tokenizer
+        text_inputs = clip_processor(
+            text=caption,
+            return_tensors="pt",
+            padding=True,
+            truncation=True,
+            max_length=77
+        )
+        
+        # Process image with CLIP processor
+        image_inputs = clip_processor(
+            images=image,
+            return_tensors="pt"
+        )
+
+        # Prepare labels
+        labels = {
+            'climate_labels': torch.tensor(int(row['climate'])),
+            'month_labels': torch.tensor(row['month']),  # Already 0-based index
+            'state_labels': torch.tensor(row['state_idx']),
+            'county_labels': torch.tensor(row['county_idx']),
+            'city_labels': torch.tensor(row['city_idx']),
+            'lat_labels': torch.tensor(float(row['latitude'])),
+            'lng_labels': torch.tensor(float(row['longitude']))
+        }
+        
+        return {
+            'pixel_values': image_inputs['pixel_values'].squeeze(0),
+            'input_ids': text_inputs['input_ids'].squeeze(0),
+            'attention_mask': text_inputs['attention_mask'].squeeze(0),
+            **labels
+        }
+    
+    def __len__(self) -> int:
+        """Get the total number of samples in the dataset."""
+        return len(self.df)

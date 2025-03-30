@@ -1,16 +1,14 @@
-joblib
-wandb
-hydra-core
-numpy
-scipy
-pandas
-scikit-learn
-pytorch-lightning
-transformers
+--extra-index-url https://download.pytorch.org/whl/cu118
 accelerate
-peft
-geos
-reverse_geocoder
-matplotlib
 hapless
+ipywidgets
 ipykernel
+matplotlib
+numpy
+pandas
+scipy
+scikit-learn
+transformers
+tensorboard
+torch==2.5.1
+torchvision==0.20.1
