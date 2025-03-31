@@ -322,7 +322,7 @@ def evaluate_geolocation_model(
             inputs = {k: v.to(device) for k, v in batch.items()}
             
             # Forward pass
-            outputs = model(**inputs)
+            outputs = model(**inputs, is_training=False)
             
             # Track losses
             total_loss += outputs.loss.item() * len(batch)

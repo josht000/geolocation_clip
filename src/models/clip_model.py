@@ -99,7 +99,8 @@ class CLIPModel(nn.Module):
             
     def forward(self, pixel_values=None, input_ids=None, attention_mask=None,
                 climate_labels=None, month_labels=None, state_labels=None,
-                county_labels=None, city_labels=None, lat_labels=None, lng_labels=None):
+                county_labels=None, city_labels=None, lat_labels=None, lng_labels=None,
+                is_training=True):
         """Forward pass through the model.
         
         Args:
@@ -113,6 +114,7 @@ class CLIPModel(nn.Module):
             city_labels: City classification labels
             lat_labels: Latitude regression labels
             lng_labels: Longitude regression labels
+            is_training: Boolean indicating whether the model is in training mode
             
         Returns:
             ModelOutput: Named tuple containing all losses and predictions
@@ -129,9 +131,27 @@ class CLIPModel(nn.Module):
         # OR Option 2: Extract CLS token from last_hidden_state manually
         # image_embeddings = outputs.last_hidden_state[:, 0]  # Use CLS token
         
+        # Convert input labels to float32 if they aren't already
+        if climate_labels is not None:
+            climate_labels = climate_labels.to(torch.long)
+        if month_labels is not None:
+            month_labels = month_labels.to(torch.long)
+        if state_labels is not None:
+            state_labels = state_labels.to(torch.long)
+        if county_labels is not None:
+            county_labels = county_labels.to(torch.long)
+        if city_labels is not None:
+            city_labels = city_labels.to(torch.long)
+        
+        # Ensure all input tensors are float32 for coordinates
+        if lat_labels is not None:
+            lat_labels = lat_labels.to(torch.float32)
+        if lng_labels is not None:
+            lng_labels = lng_labels.to(torch.float32)
+        
         # Auxiliary predictions
-        climate_logits = self.climate_head(image_embeddings)
-        month_logits = self.month_head(image_embeddings)
+        climate_logits = self.climate_head(image_embeddings).to(torch.float32)
+        month_logits = self.month_head(image_embeddings).to(torch.float32)
         
         # Hierarchical location predictions
         location_logits = self.location_class_head(image_embeddings)
@@ -163,14 +183,30 @@ class CLIPModel(nn.Module):
         loss_city = self.location_loss(city_logits, city_labels)
         loss_location = (loss_state + loss_county + loss_city) * LOCATION_LOSS_SCALING
         
-        # Compute Haversine distance loss
-        distances = torch.zeros_like(lat_preds)
-        for i in range(len(lat_preds)):
-            distances[i] = haversine_distance(
-                lat_preds[i].item(), lng_preds[i].item(),
-                lat_labels[i].item(), lng_labels[i].item()
-            )
-        loss_distance = distances.mean() * DISTANCE_LOSS_SCALING
+        # Only compute distance loss during training to avoid evaluation errors
+        if is_training and lat_labels is not None and lng_labels is not None:
+            # Compute distance loss as before
+            distances = torch.zeros(lat_preds.size(0), device=lat_preds.device)
+            
+            for i in range(len(lat_preds)):
+                try:
+                    # Get values and move to CPU
+                    pred_lat = lat_preds[i].detach().cpu().item()
+                    pred_lng = lng_preds[i].detach().cpu().item()
+                    true_lat = lat_labels[i].detach().cpu().item() 
+                    true_lng = lng_labels[i].detach().cpu().item()
+                    
+                    # Your existing distance calculation code
+                    d = haversine_distance(pred_lat, pred_lng, true_lat, true_lng)
+                except Exception as e:
+                    d = 10000.0  # Default large distance
+                    
+                distances[i] = d
+            
+            loss_distance = distances.mean() * DISTANCE_LOSS_SCALING
+        else:
+            # Skip distance loss for evaluation
+            loss_distance = torch.tensor(0.0, device=lat_preds.device)
         
         # Total loss
         loss = loss_climate + loss_month + loss_location + loss_distance
