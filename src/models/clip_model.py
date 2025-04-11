@@ -13,7 +13,7 @@ ModelOutput = namedtuple('ModelOutput', 'loss loss_climate loss_month loss_locat
 
 # Constants
 NUM_CLIMATES = 30  # 0 to 29
-NUM_MONTHS = 12    # 1 to 12
+NUM_MONTHS = 12    # 0 to 12
 NUM_STATES = 10    # 0 to 9
 NUM_COUNTIES = 564 # unique counties
 NUM_CITIES = 1593  # unique cities
@@ -47,14 +47,38 @@ def haversine_distance(lat1, lon1, lat2, lon2):
     
     return R * c
 
-class CLIPModel(nn.Module):
+def l2_distance(lat1, lon1, lat2, lon2):
+    """Calculate the L2 (Euclidean) distance between two points.
+    
+    Args:
+        lat1, lon1: Latitude and longitude of first point in degrees
+        lat2, lon2: Latitude and longitude of second point in degrees
+        
+    Returns:
+        L2 distance in degrees
+    """
+    return math.sqrt((lat2 - lat1)**2 + (lon2 - lon1)**2)
+
+def l2_distance_tensor(pred_coords, true_coords):
+    """Calculate L2 distance between predicted and true coordinates using tensors.
+    
+    Args:
+        pred_coords: Tensor of shape [batch_size, 2] containing predicted [lat, lng]
+        true_coords: Tensor of shape [batch_size, 2] containing true [lat, lng]
+        
+    Returns:
+        Tensor of shape [batch_size] containing L2 distances
+    """
+    return torch.sqrt(torch.sum((pred_coords - true_coords) ** 2, dim=1))
+
+class GeoCLIP(nn.Module):
     def __init__(self, model_name: str = 'openai/clip-vit-base-patch32'):
         """Initialize CLIP model with auxiliary prediction heads.
         
         Args:
             model_name (str): Name of the base CLIP model to use or a path to a checkpoint dir.
         """
-        super(CLIPModel, self).__init__()
+        super(GeoCLIP, self).__init__()
         
         # Base CLIP model
         self.base_model = BaseCLIPModel.from_pretrained(model_name)
@@ -183,33 +207,30 @@ class CLIPModel(nn.Module):
         loss_city = self.location_loss(city_logits, city_labels)
         loss_location = (loss_state + loss_county + loss_city) * LOCATION_LOSS_SCALING
         
-        # Only compute distance loss during training to avoid evaluation errors
-        if is_training and lat_labels is not None and lng_labels is not None:
-            # Compute distance loss as before
-            distances = torch.zeros(lat_preds.size(0), device=lat_preds.device)
-            
-            for i in range(len(lat_preds)):
-                try:
-                    # Get values and move to CPU
-                    pred_lat = lat_preds[i].detach().cpu().item()
-                    pred_lng = lng_preds[i].detach().cpu().item()
-                    true_lat = lat_labels[i].detach().cpu().item() 
-                    true_lng = lng_labels[i].detach().cpu().item()
-                    
-                    # Your existing distance calculation code
-                    d = haversine_distance(pred_lat, pred_lng, true_lat, true_lng)
-                except Exception as e:
-                    d = 10000.0  # Default large distance
-                    
-                distances[i] = d
-            
-            loss_distance = distances.mean() * DISTANCE_LOSS_SCALING
+        # Calculate distance loss
+        if lat_labels is not None and lng_labels is not None:
+            try:
+                # Stack coordinates into [batch_size, 2] tensors
+                pred_coords = torch.stack([lat_preds, lng_preds], dim=1)
+                true_coords = torch.stack([lat_labels, lng_labels], dim=1)
+                distances = l2_distance_tensor(pred_coords, true_coords) # vectorized L2 distance
+                distances = torch.nan_to_num(distances, nan=10000.0, posinf=10000.0, neginf=10000.0)
+                loss_distance = distances.mean() * DISTANCE_LOSS_SCALING
+            except Exception as e:
+                print(f"Error calculating distance: {e}")
+                # Fallback to a default loss if there's an error
+                loss_distance = torch.tensor(10000.0, device=self.base_model.device) * DISTANCE_LOSS_SCALING
         else:
-            # Skip distance loss for evaluation
-            loss_distance = torch.tensor(0.0, device=lat_preds.device)
+            # If labels are not provided, set a default loss
+            print('No lat/lng labels provided, setting default distance loss')
+            loss_distance = torch.tensor(0.0, device=self.base_model.device)
         
         # Total loss
         loss = loss_climate + loss_month + loss_location + loss_distance
+        
+        if not is_training:
+            # During evaluation, we want to track the distance loss separately
+            print(f"Evaluation distance loss: {loss_distance.item()}")
         
         return ModelOutput(
             loss=loss,

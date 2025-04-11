@@ -265,7 +265,7 @@ class CLIPGeolocationDataset(torch.utils.data.Dataset):
             lambda x: int(datetime.datetime.fromtimestamp(x/1000).strftime("%m")) - 1
         )
         
-        # Ensure all required columns exist
+        # Ensure all required columns exist # TODO: remove this!!!
         required_columns = ['id', 'state', 'unique_sub-region', 'unique_city', 'climate', 'month', 
                           'latitude', 'longitude']
         missing_columns = [col for col in required_columns if col not in self.df.columns]
@@ -356,15 +356,30 @@ class CLIPGeolocationDataset(torch.utils.data.Dataset):
         )
 
         # Prepare labels
-        labels = {
-            'climate_labels': torch.tensor(int(row['climate'])),
-            'month_labels': torch.tensor(row['month']),  # Already 0-based index
-            'state_labels': torch.tensor(row['state_idx']),
-            'county_labels': torch.tensor(row['county_idx']),
-            'city_labels': torch.tensor(row['city_idx']),
-            'lat_labels': torch.tensor(float(row['latitude'])),
-            'lng_labels': torch.tensor(float(row['longitude']))
-        }
+        try:
+            labels = {
+                'climate_labels': torch.tensor(int(row['climate']), dtype=torch.long),
+                'month_labels': torch.tensor(row['month'], dtype=torch.long),  # Already 0-based index
+                'state_labels': torch.tensor(row['state_idx'], dtype=torch.long),
+                'county_labels': torch.tensor(row['county_idx'], dtype=torch.long),
+                'city_labels': torch.tensor(row['city_idx'], dtype=torch.long),
+                'lat_labels': torch.tensor(float(row['latitude']), dtype=torch.float32),
+                'lng_labels': torch.tensor(float(row['longitude']), dtype=torch.float32)
+            }
+        except Exception as e:
+            print(f'\nERROR! {e}')
+            print(f'row:\n {row}')
+            raise e
+        
+        # Handle any potential NaN or invalid values
+        for key, tensor in labels.items():
+            if torch.isnan(tensor) or torch.isinf(tensor):
+                # Replace NaN or inf values with a default value
+                print(f'ERROR! {key} is NaN or inf')
+                if 'lat' in key or 'lng' in key:
+                    labels[key] = torch.tensor(0.0, dtype=torch.float32)
+                else:
+                    labels[key] = torch.tensor(0, dtype=torch.long)
         
         return {
             'pixel_values': image_inputs['pixel_values'].squeeze(0),

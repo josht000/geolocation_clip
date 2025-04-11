@@ -6,7 +6,7 @@ from multiprocessing import set_start_method
 from transformers import TrainingArguments
 from src.train_modes import pretrain, train_geolocation_model
 from src.datasets import PretrainDatasetOSVMini, CLIPGeolocationDataset
-from src.models.clip_model import CLIPModel
+from src.models.clip_model import GeoCLIP
 from warnings import filterwarnings
 
 filterwarnings('ignore', category=UserWarning, module='transformers')
@@ -87,7 +87,7 @@ def main():
                                          'datasets/unique_city_list.txt', 
                                          'datasets/unique_sub-region_list.txt', False, 224)
         
-        model = CLIPModel('saved_models/checkpoint-1400')
+        model = GeoCLIP('saved_models/checkpoint-1400')
         # Use TrainingArguments directly
         trained_model = train_geolocation_model(
             model, 

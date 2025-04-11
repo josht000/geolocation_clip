@@ -3,13 +3,12 @@ import torch
 from torch.utils.data import DataLoader
 from torch.utils.tensorboard import SummaryWriter
 from tqdm.auto import tqdm
-from transformers import CLIPModel, CLIPProcessor
+from transformers import CLIPModel
 from typing import Any, Dict, Union
 import os
 
 from transformers import Trainer, TrainingArguments, \
-                         AutoModelForImageClassification, \
-                         CLIPVisionModel, CLIPModel, CLIPProcessor
+                         CLIPVisionModel, CLIPModel
 from warnings import filterwarnings
 
 filterwarnings('ignore', category=UserWarning, module='transformers')
@@ -177,6 +176,7 @@ def train_geolocation_model(
     # Training loop
     global_step = 0
     best_val_loss = float('inf')
+    print(f'Training for {training_args.num_train_epochs} epochs...')
     
     for epoch in range(int(training_args.num_train_epochs)):
         model.train()
@@ -246,7 +246,7 @@ def train_geolocation_model(
         )
         
         if should_evaluate_epoch:
-            val_metrics = evaluate_geolocation_model(model, val_loader, device)
+            val_metrics = evaluate_geolocation_model(model, val_loader, device, batch_size=training_args.per_device_eval_batch_size)
             for metric_name, metric_value in val_metrics.items():
                 writer.add_scalar(f"eval/{metric_name}", metric_value, global_step)
                 logger.info(f"Validation {metric_name}: {metric_value:.4f}")
@@ -266,7 +266,6 @@ def evaluate_geolocation_model(
     model: Union[CLIPModel, str],
     val_loader: DataLoader = None,
     device: str = 'cuda',
-    val_dataset: Any = None,
     batch_size: int = 32,
 ) -> Dict[str, float]:
     """Evaluate a geolocation model.
@@ -275,7 +274,6 @@ def evaluate_geolocation_model(
         model: Model to evaluate or path to model
         val_loader: Validation data loader (if None, one will be created from val_dataset)
         device: Device to evaluate on
-        val_dataset: Validation dataset (used if val_loader is None)
         batch_size: Batch size for evaluation
         
     Returns:
@@ -289,13 +287,6 @@ def evaluate_geolocation_model(
     # Create validation loader if not provided
     if val_loader is None:
         assert val_dataset is not None, "Either val_loader or val_dataset must be provided"
-        val_loader = DataLoader(
-            val_dataset,
-            batch_size=batch_size,
-            shuffle=False,
-            collate_fn=geo_collate_fn,
-            num_workers=2
-        )
     
     # Set model to evaluation mode
     model.eval()
