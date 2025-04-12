@@ -2,8 +2,11 @@ import os
 import torch
 import argparse
 import logging
+import copy
 from multiprocessing import set_start_method
 from transformers import TrainingArguments
+from torchvision.models import *
+
 from src.train_modes import pretrain, train_geolocation_model
 from src.datasets import PretrainDatasetOSVMini, CLIPGeolocationDataset
 from src.models.clip_model import GeoCLIP
@@ -14,7 +17,7 @@ filterwarnings('ignore', category=FutureWarning, module='transformers')
 
 logger = logging.getLogger('run')
 
-# Pretrain arguments for PIGEOTTO --> RUN ON 4 A100 GPUs
+# Pretrain arguments for PIGEOTTO
 PRETAIN_ARGS = TrainingArguments(
         output_dir='saved_models/pretrained_osv-mini',
         overwrite_output_dir = True,
@@ -49,7 +52,7 @@ PRETAIN_ARGS = TrainingArguments(
     )
 
 GEO_TRAIN_ARGS = TrainingArguments(
-    output_dir='saved_models/geolocation_model',
+    output_dir='saved_models/geoclip_no_context',
     remove_unused_columns=False,
     per_device_train_batch_size=32,
     per_device_eval_batch_size=64,
@@ -69,16 +72,32 @@ GEO_TRAIN_ARGS = TrainingArguments(
 def parse_args():
     parser = argparse.ArgumentParser()
     parser.add_argument('--function', type=str, default='pretrain', choices=['pretrain', 'train'])
+    parser.add_argument('--with_context', type=bool, default=True, help='Train with contextual features (climate, city, state, etc.)')
+    parser.add_argument('--pretrained_model', type=str, default='saved_models/checkpoint-1400', help='Pretrained model to use')
+    parser.add_argument('--model', type=str, default='clip', help='see get_model() and torchvision.models')
     args = parser.parse_args()
     return args
+
+def get_model(args):
+    if args.model == 'geoclip':
+        return GeoCLIP(args.pretrained_model, use_context=args.with_context)
+    else:
+        raise ValueError(f'Model {args.model} NEEDS TO BE IMPLEMENTED!')
 
 def main():
     args = parse_args() 
 
+    # this is only for pretraining CLIP with the contrastive learning objective.
     if args.function == 'pretrain':
         train_ds = PretrainDatasetOSVMini(split='train', dir='datasets/osv-mini-129k')
         test_ds = PretrainDatasetOSVMini(split='test', dir='datasets/osv-mini-129k')
-        pretrain('openai/clip-vit-base-patch32', train_ds, test_ds, PRETAIN_ARGS, True)
+        
+        # Create experiment-specific output directory for pretraining
+        pretrain_args = PRETAIN_ARGS.copy()
+        pretrain_args.output_dir = os.path.join('saved_models', 'pretrain', args.name)
+        
+        pretrain('openai/clip-vit-base-patch32', train_ds, test_ds, pretrain_args, True)
+
     elif args.function == 'train':
         train_ds = CLIPGeolocationDataset('train', 'datasets/osv-mini-129k', 
                                           'datasets/unique_city_list.txt', 
@@ -86,16 +105,19 @@ def main():
         test_ds = CLIPGeolocationDataset('test', 'datasets/osv-mini-129k', 
                                          'datasets/unique_city_list.txt', 
                                          'datasets/unique_sub-region_list.txt', False, 224)
-        
-        model = GeoCLIP('saved_models/checkpoint-1400')
-        # Use TrainingArguments directly
+
+        model = get_model(args)
+
+        # TRAIN
         trained_model = train_geolocation_model(
             model, 
             train_ds, 
             test_ds, 
             GEO_TRAIN_ARGS,
-            'cuda'
+            'cuda',
+            args.with_context
         )
+
     else:
         raise NotImplementedError(f'Mode {args.function} is not implemented.')
 

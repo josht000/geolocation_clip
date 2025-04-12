@@ -118,7 +118,8 @@ def train_geolocation_model(
     train_dataset: Any,
     val_dataset: Any,
     training_args: TrainingArguments,
-    device: str = 'cuda'
+    device: str = 'cuda',
+    with_context: bool = True
 ) -> CLIPModel:
     """Train a geolocation model based on CLIP architecture.
     
@@ -219,7 +220,12 @@ def train_geolocation_model(
                 )
                 
                 if should_evaluate:
-                    val_metrics = evaluate_geolocation_model(model, val_loader, device)
+                    val_metrics = evaluate_geolocation_model(
+                        model, 
+                        val_loader, 
+                        device, 
+                        with_context=with_context
+                    )
                     for metric_name, metric_value in val_metrics.items():
                         writer.add_scalar(f"eval/{metric_name}", metric_value, global_step)
                     
@@ -248,7 +254,12 @@ def train_geolocation_model(
         )
         
         if should_evaluate_epoch:
-            val_metrics = evaluate_geolocation_model(model, val_loader, device, batch_size=training_args.per_device_eval_batch_size)
+            val_metrics = evaluate_geolocation_model(
+                model, 
+                val_loader, 
+                device, 
+                with_context=with_context
+            )
             for metric_name, metric_value in val_metrics.items():
                 writer.add_scalar(f"eval/{metric_name}", metric_value, global_step)
                 logger.info(f"Validation {metric_name}: {metric_value:.4f}")
@@ -266,17 +277,17 @@ def train_geolocation_model(
 
 def evaluate_geolocation_model(
     model: Union[CLIPModel, str],
-    val_loader: DataLoader = None,
+    val_loader: DataLoader,
     device: str = 'cuda',
-    batch_size: int = 32,
+    with_context: bool = True
 ) -> Dict[str, float]:
     """Evaluate a geolocation model.
     
     Args:
         model: Model to evaluate or path to model
-        val_loader: Validation data loader (if None, one will be created from val_dataset)
+        val_loader: Validation data loader
         device: Device to evaluate on
-        batch_size: Batch size for evaluation
+        with_context: Whether the model was trained with contextual features
         
     Returns:
         Dictionary of evaluation metrics
@@ -286,28 +297,24 @@ def evaluate_geolocation_model(
         model = CLIPModel.from_pretrained(model)
         model.to(device)
     
-    # Create validation loader if not provided
-    if val_loader is None:
-        assert val_dataset is not None, "Either val_loader or val_dataset must be provided"
-    
     # Set model to evaluation mode
     model.eval()
     
     # Track metrics
     total_loss = 0
-    total_climate_loss = 0
-    total_month_loss = 0
-    total_location_loss = 0
     total_distance_loss = 0
-    
-    total_correct_climate = 0
-    total_correct_month = 0
-    total_correct_state = 0
-    total_correct_county = 0
-    total_correct_city = 0
     total_samples = 0
     
-    total_distance_error = 0
+    # Initialize context-specific metrics if needed
+    if with_context:
+        total_climate_loss = 0
+        total_month_loss = 0
+        total_location_loss = 0
+        total_correct_climate = 0
+        total_correct_month = 0
+        total_correct_state = 0
+        total_correct_county = 0
+        total_correct_city = 0
     
     with torch.no_grad():
         for batch in tqdm(val_loader, desc="Evaluating"):
@@ -319,43 +326,48 @@ def evaluate_geolocation_model(
             
             # Track losses
             total_loss += outputs.loss.item() * len(batch)
-            total_climate_loss += outputs.loss_climate.item() * len(batch)
-            total_month_loss += outputs.loss_month.item() * len(batch)
-            total_location_loss += outputs.loss_location.item() * len(batch)
             total_distance_loss += outputs.loss_distance.item() * len(batch)
             
-            # Track accuracies
-            climate_preds = outputs.preds_climate.argmax(dim=1)
-            month_preds = outputs.preds_month.argmax(dim=1)
-            state_preds = outputs.preds_state.argmax(dim=1)
-            county_preds = outputs.preds_county.argmax(dim=1)
-            city_preds = outputs.preds_city.argmax(dim=1)
-            
-            total_correct_climate += (climate_preds == inputs['climate_labels']).sum().item()
-            total_correct_month += (month_preds == inputs['month_labels']).sum().item()
-            total_correct_state += (state_preds == inputs['state_labels']).sum().item()
-            total_correct_county += (county_preds == inputs['county_labels']).sum().item()
-            total_correct_city += (city_preds == inputs['city_labels']).sum().item()
-            
-            # Track location error (distance in km)
-            # This is already computed in the model as part of loss_distance
+            # Track context-specific metrics if needed
+            if with_context:
+                total_climate_loss += outputs.loss_climate.item() * len(batch)
+                total_month_loss += outputs.loss_month.item() * len(batch)
+                total_location_loss += outputs.loss_location.item() * len(batch)
+                
+                # Track accuracies
+                climate_preds = outputs.preds_climate.argmax(dim=1)
+                month_preds = outputs.preds_month.argmax(dim=1)
+                state_preds = outputs.preds_state.argmax(dim=1)
+                county_preds = outputs.preds_county.argmax(dim=1)
+                city_preds = outputs.preds_city.argmax(dim=1)
+                
+                total_correct_climate += (climate_preds == inputs['climate_labels']).sum().item()
+                total_correct_month += (month_preds == inputs['month_labels']).sum().item()
+                total_correct_state += (state_preds == inputs['state_labels']).sum().item()
+                total_correct_county += (county_preds == inputs['county_labels']).sum().item()
+                total_correct_city += (city_preds == inputs['city_labels']).sum().item()
             
             total_samples += len(batch)
     
-    # Calculate metrics
+    # Calculate base metrics
     metrics = {
         "loss": total_loss / total_samples,
-        "climate_loss": total_climate_loss / total_samples,
-        "month_loss": total_month_loss / total_samples,
-        "location_loss": total_location_loss / total_samples,
         "distance_loss": total_distance_loss / total_samples,
-        "climate_accuracy": total_correct_climate / total_samples,
-        "month_accuracy": total_correct_month / total_samples,
-        "state_accuracy": total_correct_state / total_samples,
-        "county_accuracy": total_correct_county / total_samples,
-        "city_accuracy": total_correct_city / total_samples,
         "average_distance_km": total_distance_loss / total_samples / DISTANCE_LOSS_SCALING
     }
+    
+    # Add context-specific metrics if needed
+    if with_context:
+        metrics.update({
+            "climate_loss": total_climate_loss / total_samples,
+            "month_loss": total_month_loss / total_samples,
+            "location_loss": total_location_loss / total_samples,
+            "climate_accuracy": total_correct_climate / total_samples,
+            "month_accuracy": total_correct_month / total_samples,
+            "state_accuracy": total_correct_state / total_samples,
+            "county_accuracy": total_correct_county / total_samples,
+            "city_accuracy": total_correct_city / total_samples
+        })
     
     return metrics
 
