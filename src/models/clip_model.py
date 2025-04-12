@@ -5,24 +5,15 @@ from collections import namedtuple
 import math
 from warnings import filterwarnings
 
+from src.constants import *
+
 filterwarnings('ignore', category=UserWarning, module='transformers')
 
 # Named Tuple for model outputs
 ModelOutput = namedtuple('ModelOutput', 'loss loss_climate loss_month loss_location loss_distance \
                          preds_climate preds_month preds_state preds_county preds_city preds_lat preds_lng')
 
-# Constants
-NUM_CLIMATES = 30  # 0 to 29
-NUM_MONTHS = 12    # 0 to 12
-NUM_STATES = 10    # 0 to 9
-NUM_COUNTIES = 564 # unique counties
-NUM_CITIES = 1593  # unique cities
 
-# Loss scaling factors
-CLIMATE_LOSS_SCALING = 1
-MONTH_LOSS_SCALING = 1
-LOCATION_LOSS_SCALING = 2 # Weighted sum of state, county, city losses
-DISTANCE_LOSS_SCALING = 3 # L2 distance loss from target
 
 def haversine_distance(lat1, lon1, lat2, lon2):
     """Calculate the Haversine distance between two points on Earth.
@@ -228,9 +219,9 @@ class GeoCLIP(nn.Module):
         # Total loss
         loss = loss_climate + loss_month + loss_location + loss_distance
         
-        if not is_training:
+        # if not is_training:
             # During evaluation, we want to track the distance loss separately
-            print(f"Evaluation distance loss: {loss_distance.item()}")
+            # print(f"Evaluation distance loss: {loss_distance.item()}")
         
         return ModelOutput(
             loss=loss,
@@ -246,3 +237,67 @@ class GeoCLIP(nn.Module):
             preds_lat=lat_preds,
             preds_lng=lng_preds
         )
+        
+    def save_pretrained(self, save_directory: str):
+        """Save the model's state and configuration to a directory.
+        
+        Args:
+            save_directory (str): Directory to save the model to.
+        """
+        import os
+        import json
+        
+        # Create the directory if it doesn't exist
+        os.makedirs(save_directory, exist_ok=True)
+        
+        # Save the model's state dict
+        torch.save(self.state_dict(), os.path.join(save_directory, "geo_clip.pt"))
+        
+        # Save model configuration
+        config = {
+            "model_name": self.base_model.name_or_path,
+            "hidden_size": self.hidden_size,
+            "num_climates": NUM_CLIMATES,
+            "num_months": NUM_MONTHS,
+            "num_states": NUM_STATES,
+            "num_counties": NUM_COUNTIES,
+            "num_cities": NUM_CITIES,
+            "climate_loss_scaling": CLIMATE_LOSS_SCALING,
+            "month_loss_scaling": MONTH_LOSS_SCALING,
+            "location_loss_scaling": LOCATION_LOSS_SCALING,
+            "distance_loss_scaling": DISTANCE_LOSS_SCALING
+        }
+        
+        with open(os.path.join(save_directory, "config.json"), "w") as f:
+            json.dump(config, f, indent=2)
+            
+        # Save the base model configuration
+        self.base_model.config.save_pretrained(save_directory)
+        
+        print(f"Model saved to {save_directory}")
+        
+    @classmethod
+    def from_pretrained(cls, model_path: str):
+        """Load a pretrained GeoCLIP model from a directory.
+        
+        Args:
+            model_path (str): Path to the pretrained model directory.
+            
+        Returns:
+            GeoCLIP: Loaded model.
+        """
+        import os
+        import json
+        
+        # Load configuration
+        with open(os.path.join(model_path, "config.json"), "r") as f:
+            config = json.load(f)
+            
+        # Create model instance
+        model = cls(model_name=config["model_name"])
+        
+        # Load state dict
+        state_dict = torch.load(os.path.join(model_path, "pytorch_model.bin"))
+        model.load_state_dict(state_dict)
+        
+        return model

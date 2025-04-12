@@ -9,6 +9,8 @@ from transformers import CLIPProcessor
 from torchvision.transforms import transforms
 from warnings import filterwarnings
 
+from src.constants import *
+
 filterwarnings('ignore', category=FutureWarning, module='transformers')
 
 clip_processor = CLIPProcessor.from_pretrained('openai/clip-vit-base-patch32', use_fast=False)
@@ -264,23 +266,16 @@ class CLIPGeolocationDataset(torch.utils.data.Dataset):
         self.df['month'] = self.df['captured_at'].apply(
             lambda x: int(datetime.datetime.fromtimestamp(x/1000).strftime("%m")) - 1
         )
-        
-        # Ensure all required columns exist # TODO: remove this!!!
-        required_columns = ['id', 'state', 'unique_sub-region', 'unique_city', 'climate', 'month', 
-                          'latitude', 'longitude']
-        missing_columns = [col for col in required_columns if col not in self.df.columns]
-        if missing_columns:
-            raise ValueError(f"Missing required columns: {missing_columns}")
-        
+               
         # Create label mappings using provided unique values
         self.state_to_idx = {state: idx for idx, state in enumerate(sorted(self.df['state'].unique()))}
         self.county_to_idx = {county: idx for idx, county in enumerate(self.unique_counties)}
         self.city_to_idx = {city: idx for idx, city in enumerate(self.unique_cities)}
         
-        # Convert categorical labels to indices
-        self.df['state_idx'] = self.df['state'].map(self.state_to_idx)
-        self.df['county_idx'] = self.df['unique_sub-region'].map(self.county_to_idx)
-        self.df['city_idx'] = self.df['unique_city'].map(self.city_to_idx)
+        # Convert categorical labels to indices - using direct dictionary lookup
+        self.df['state_idx'] = self.df['state'].apply(lambda x: self.state_to_idx.get(x, 0))
+        self.df['county_idx'] = self.df['unique_sub-region'].apply(lambda x: self.county_to_idx.get(x, 0))
+        self.df['city_idx'] = self.df['unique_city'].apply(lambda x: self.city_to_idx.get(x, 0))
         
         if shuffle:
             self.df = self.df.sample(frac=1.0, random_state=330)
@@ -357,14 +352,30 @@ class CLIPGeolocationDataset(torch.utils.data.Dataset):
 
         # Prepare labels
         try:
+            # Ensure indices are within valid ranges
+            climate_idx = min(max(int(row['climate']), 0), NUM_CLIMATES - 1)
+            month_idx = min(max(int(row['month']), 0), NUM_MONTHS - 1)
+            state_idx = min(max(int(row['state_idx']), 0), NUM_STATES - 1)
+            county_idx = min(max(int(row['county_idx']), 0), len(self.unique_counties) - 1)
+            city_idx = min(max(int(row['city_idx']), 0), len(self.unique_cities) - 1)
+            
+            # Convert coordinates to float, handling any potential issues
+            try:
+                lat = float(row['latitude'])
+                lng = float(row['longitude'])
+            except (ValueError, TypeError) as e:
+                print(f"ERROR: Invalid coordinates for sample {index}")
+                # lat, lng = 0.0, 0.0
+                raise e
+            
             labels = {
-                'climate_labels': torch.tensor(int(row['climate']), dtype=torch.long),
-                'month_labels': torch.tensor(row['month'], dtype=torch.long),  # Already 0-based index
-                'state_labels': torch.tensor(row['state_idx'], dtype=torch.long),
-                'county_labels': torch.tensor(row['county_idx'], dtype=torch.long),
-                'city_labels': torch.tensor(row['city_idx'], dtype=torch.long),
-                'lat_labels': torch.tensor(float(row['latitude']), dtype=torch.float32),
-                'lng_labels': torch.tensor(float(row['longitude']), dtype=torch.float32)
+                'climate_labels': torch.tensor(climate_idx, dtype=torch.long),
+                'month_labels': torch.tensor(month_idx, dtype=torch.long),
+                'state_labels': torch.tensor(state_idx, dtype=torch.long),
+                'county_labels': torch.tensor(county_idx, dtype=torch.long),
+                'city_labels': torch.tensor(city_idx, dtype=torch.long),
+                'lat_labels': torch.tensor(lat, dtype=torch.float32),
+                'lng_labels': torch.tensor(lng, dtype=torch.float32)
             }
         except Exception as e:
             print(f'\nERROR! {e}')
@@ -374,8 +385,7 @@ class CLIPGeolocationDataset(torch.utils.data.Dataset):
         # Handle any potential NaN or invalid values
         for key, tensor in labels.items():
             if torch.isnan(tensor) or torch.isinf(tensor):
-                # Replace NaN or inf values with a default value
-                print(f'ERROR! {key} is NaN or inf')
+                print(f'ERROR! {key} is NaN or inf in sample {index}')
                 if 'lat' in key or 'lng' in key:
                     labels[key] = torch.tensor(0.0, dtype=torch.float32)
                 else:

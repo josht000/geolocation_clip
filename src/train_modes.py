@@ -11,6 +11,8 @@ from transformers import Trainer, TrainingArguments, \
                          CLIPVisionModel, CLIPModel
 from warnings import filterwarnings
 
+from src.constants import *
+
 filterwarnings('ignore', category=UserWarning, module='transformers')
 
 # Initialize Logger
@@ -177,7 +179,7 @@ def train_geolocation_model(
     global_step = 0
     best_val_loss = float('inf')
     print(f'Training for {training_args.num_train_epochs} epochs...')
-    
+
     for epoch in range(int(training_args.num_train_epochs)):
         model.train()
         epoch_loss = 0
@@ -352,7 +354,7 @@ def evaluate_geolocation_model(
         "state_accuracy": total_correct_state / total_samples,
         "county_accuracy": total_correct_county / total_samples,
         "city_accuracy": total_correct_city / total_samples,
-        "average_distance_km": total_distance_loss / total_samples / model.DISTANCE_LOSS_SCALING
+        "average_distance_km": total_distance_loss / total_samples / DISTANCE_LOSS_SCALING
     }
     
     return metrics
