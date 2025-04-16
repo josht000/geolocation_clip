@@ -1,3 +1,4 @@
+# Based on Python 3.12 on Windows 11. Built 4/12/2025
 --extra-index-url https://download.pytorch.org/whl/cu118
 accelerate
 hapless
@@ -12,3 +13,6 @@ transformers
 tensorboard
 torch==2.5.1
 torchvision==0.20.1
+onnx
+onnxruntime
+graphviz

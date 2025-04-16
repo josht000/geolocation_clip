@@ -226,7 +226,7 @@ def read_unique_values(filepath: str) -> list:
 
 class CLIPGeolocationDataset(torch.utils.data.Dataset):
     def __init__(self, split: str, dir: str, unique_cities_file: str, unique_counties_file: str,
-                 shuffle: bool=True, image_size: int=224):
+                 shuffle: bool=True, image_size: int=224, use_context: bool=True):
         """Initialize the dataset.
         
         Args:
@@ -236,6 +236,7 @@ class CLIPGeolocationDataset(torch.utils.data.Dataset):
             unique_counties_file (str): Path to file containing unique county names
             shuffle (bool): Whether to shuffle the data
             image_size (int): Size to resize images to
+            use_context (bool): Whether to include contextual features (climate, month, state, etc.)
         """
         self.split = split
         self.shuffle = shuffle
@@ -243,6 +244,7 @@ class CLIPGeolocationDataset(torch.utils.data.Dataset):
         self.dir = dir
         self.image_dir = os.path.join(dir, f'{split}_images')
         self.csv_path = os.path.join(dir, f'{split}_mini.csv')
+        self.use_context = use_context
 
         # Basic checks
         assert split in ['train', 'val', 'test']
@@ -284,6 +286,7 @@ class CLIPGeolocationDataset(torch.utils.data.Dataset):
         print(f'Number of unique states: {len(self.state_to_idx)}')
         print(f'Number of unique counties: {len(self.unique_counties)}')
         print(f'Number of unique cities: {len(self.unique_cities)}')
+        print(f'Using context: {self.use_context}')
     
     def _crop_resize(self, image: Image.Image) -> Image.Image:
         """Crop and resize image to square."""
@@ -317,11 +320,11 @@ class CLIPGeolocationDataset(torch.utils.data.Dataset):
                 - pixel_values: Image tensor
                 - input_ids: Text input IDs
                 - attention_mask: Text attention mask
-                - climate_labels: Climate classification label
-                - month_labels: Month classification label
-                - state_labels: State classification label
-                - county_labels: County classification label
-                - city_labels: City classification label
+                - climate_labels: Climate classification label (if use_context=True)
+                - month_labels: Month classification label (if use_context=True)
+                - state_labels: State classification label (if use_context=True)
+                - county_labels: County classification label (if use_context=True)
+                - city_labels: City classification label (if use_context=True)
                 - lat_labels: Latitude value
                 - lng_labels: Longitude value
         """
@@ -352,51 +355,54 @@ class CLIPGeolocationDataset(torch.utils.data.Dataset):
 
         # Prepare labels
         try:
-            # Ensure indices are within valid ranges
-            climate_idx = min(max(int(row['climate']), 0), NUM_CLIMATES - 1)
-            month_idx = min(max(int(row['month']), 0), NUM_MONTHS - 1)
-            state_idx = min(max(int(row['state_idx']), 0), NUM_STATES - 1)
-            county_idx = min(max(int(row['county_idx']), 0), len(self.unique_counties) - 1)
-            city_idx = min(max(int(row['city_idx']), 0), len(self.unique_cities) - 1)
-            
-            # Convert coordinates to float, handling any potential issues
+            # Always include coordinate labels
             try:
                 lat = float(row['latitude'])
                 lng = float(row['longitude'])
             except (ValueError, TypeError) as e:
                 print(f"ERROR: Invalid coordinates for sample {index}")
-                # lat, lng = 0.0, 0.0
                 raise e
             
-            labels = {
-                'climate_labels': torch.tensor(climate_idx, dtype=torch.long),
-                'month_labels': torch.tensor(month_idx, dtype=torch.long),
-                'state_labels': torch.tensor(state_idx, dtype=torch.long),
-                'county_labels': torch.tensor(county_idx, dtype=torch.long),
-                'city_labels': torch.tensor(city_idx, dtype=torch.long),
+            # Base return dictionary with image and coordinates
+            result = {
+                'pixel_values': image_inputs['pixel_values'].squeeze(0),
+                'input_ids': text_inputs['input_ids'].squeeze(0),
                 'lat_labels': torch.tensor(lat, dtype=torch.float32),
                 'lng_labels': torch.tensor(lng, dtype=torch.float32)
             }
+            
+            # Add contextual labels only if use_context is True
+            if self.use_context:
+                # Ensure indices are within valid ranges
+                climate_idx = min(max(int(row['climate']), 0), NUM_CLIMATES - 1)
+                month_idx = min(max(int(row['month']), 0), NUM_MONTHS - 1)
+                state_idx = min(max(int(row['state_idx']), 0), NUM_STATES - 1)
+                county_idx = min(max(int(row['county_idx']), 0), len(self.unique_counties) - 1)
+                city_idx = min(max(int(row['city_idx']), 0), len(self.unique_cities) - 1)
+                
+                context_labels = {
+                    'climate_labels': torch.tensor(climate_idx, dtype=torch.long),
+                    'month_labels': torch.tensor(month_idx, dtype=torch.long),
+                    'state_labels': torch.tensor(state_idx, dtype=torch.long),
+                    'county_labels': torch.tensor(county_idx, dtype=torch.long),
+                    'city_labels': torch.tensor(city_idx, dtype=torch.long)
+                }
+                
+                # Handle any potential NaN or invalid values in context labels
+                for key, tensor in context_labels.items():
+                    if torch.isnan(tensor) or torch.isinf(tensor):
+                        print(f'ERROR! {key} is NaN or inf in sample {index}')
+                        context_labels[key] = torch.tensor(0, dtype=torch.long)
+                
+                # Add context labels to result
+                result.update(context_labels)
+            
+            return result
+            
         except Exception as e:
             print(f'\nERROR! {e}')
             print(f'row:\n {row}')
             raise e
-        
-        # Handle any potential NaN or invalid values
-        for key, tensor in labels.items():
-            if torch.isnan(tensor) or torch.isinf(tensor):
-                print(f'ERROR! {key} is NaN or inf in sample {index}')
-                if 'lat' in key or 'lng' in key:
-                    labels[key] = torch.tensor(0.0, dtype=torch.float32)
-                else:
-                    labels[key] = torch.tensor(0, dtype=torch.long)
-        
-        return {
-            'pixel_values': image_inputs['pixel_values'].squeeze(0),
-            'input_ids': text_inputs['input_ids'].squeeze(0),
-            'attention_mask': text_inputs['attention_mask'].squeeze(0),
-            **labels
-        }
     
     def __len__(self) -> int:
         """Get the total number of samples in the dataset."""

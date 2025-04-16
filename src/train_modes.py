@@ -7,11 +7,11 @@ from transformers import CLIPModel
 from typing import Any, Dict, Union
 import os
 
-from transformers import Trainer, TrainingArguments, \
-                         CLIPVisionModel, CLIPModel
+from transformers import Trainer, TrainingArguments, CLIPModel
 from warnings import filterwarnings
 
 from src.constants import *
+from src.models.train_losses import GeoCLIPLoss, l2_distance_tensor
 
 filterwarnings('ignore', category=UserWarning, module='transformers')
 
@@ -73,7 +73,11 @@ def geo_collate_fn(examples):
     vision_model_keys = ['pixel_values', 'climate_labels', 'month_labels', 'state_labels', 
                          'county_labels', 'city_labels', 'lat_labels', 'lng_labels']
     
-    for k in examples[0].keys():
+    # Get all keys from the first example
+    available_keys = examples[0].keys()
+    
+    # Only include keys that are available in the examples
+    for k in available_keys:
         if k in vision_model_keys:
             batch[k] = torch.stack([example[k] for example in examples])
     
@@ -119,7 +123,7 @@ def train_geolocation_model(
     val_dataset: Any,
     training_args: TrainingArguments,
     device: str = 'cuda',
-    with_context: bool = True
+    use_context: bool = True
 ) -> CLIPModel:
     """Train a geolocation model based on CLIP architecture.
     
@@ -129,6 +133,7 @@ def train_geolocation_model(
         val_dataset: Validation dataset
         training_args: HuggingFace TrainingArguments
         device: Device to train on ('cuda' or 'cpu')
+        use_context: Whether to use contextual features during training
         
     Returns:
         Trained model
@@ -140,41 +145,49 @@ def train_geolocation_model(
     if isinstance(model, str):
         model = CLIPModel.from_pretrained(model)
     
-    model.to(device)
+    model = model.to(device)
+    model.train()
     
-    # Setup data loaders
+    # Create data loaders
     train_loader = DataLoader(
-        train_dataset, 
+        train_dataset,
         batch_size=training_args.per_device_train_batch_size,
         shuffle=True,
-        collate_fn=geo_collate_fn,
-        num_workers=4
+        num_workers=training_args.dataloader_num_workers,
+        collate_fn=geo_collate_fn
     )
     
     val_loader = DataLoader(
         val_dataset,
         batch_size=training_args.per_device_eval_batch_size,
         shuffle=False,
-        collate_fn=geo_collate_fn,
-        num_workers=2
+        num_workers=training_args.dataloader_num_workers,
+        collate_fn=geo_collate_fn
     )
     
-    # Optimizer
+    # Initialize optimizer
     optimizer = torch.optim.AdamW(
         model.parameters(),
         lr=training_args.learning_rate,
         weight_decay=training_args.weight_decay
     )
     
-    # Learning rate scheduler
-    total_steps = len(train_loader) * training_args.num_train_epochs // training_args.gradient_accumulation_steps
-    scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
-        optimizer, 
-        T_max=total_steps
+    # Initialize learning rate scheduler
+    num_training_steps = len(train_loader) * training_args.num_train_epochs
+    total_steps = int(num_training_steps * training_args.warmup_ratio)
+    
+    lr_scheduler = torch.optim.lr_scheduler.LinearLR(
+        optimizer,
+        start_factor=1.0,
+        end_factor=0.0,
+        total_iters=total_steps
     )
     
-    # Tensorboard
-    writer = SummaryWriter(log_dir=f"{training_args.output_dir}/logs")
+    # Initialize TensorBoard
+    writer = SummaryWriter(training_args.output_dir)
+    
+    # Initialize loss function
+    loss_fn = GeoCLIPLoss(device)
     
     # Training loop
     global_step = 0
@@ -183,94 +196,57 @@ def train_geolocation_model(
 
     for epoch in range(int(training_args.num_train_epochs)):
         model.train()
-        epoch_loss = 0
+        total_loss = 0
         
-        progress_bar = tqdm(train_loader, desc=f"Epoch {epoch+1}/{int(training_args.num_train_epochs)}")
-        for step, batch in enumerate(progress_bar):
+        for batch_idx, batch in enumerate(tqdm(train_loader, desc=f"Epoch {epoch + 1}")):
             # Move inputs to device
             inputs = {k: v.to(device) for k, v in batch.items()}
             
             # Forward pass
             outputs = model(**inputs)
-            loss = outputs.loss
+            
+            # Calculate loss using GeoCLIPLoss
+            loss, loss_dict = loss_fn(
+                outputs,
+                climate_labels=inputs.get('climate_labels') if use_context and 'climate_labels' in inputs else None,
+                month_labels=inputs.get('month_labels') if use_context and 'month_labels' in inputs else None,
+                state_labels=inputs.get('state_labels') if use_context and 'state_labels' in inputs else None,
+                county_labels=inputs.get('county_labels') if use_context and 'county_labels' in inputs else None,
+                city_labels=inputs.get('city_labels') if use_context and 'city_labels' in inputs else None,
+                lat_labels=inputs.get('lat_labels'),
+                lng_labels=inputs.get('lng_labels')
+            )
             
             # Backward pass with gradient accumulation
             loss = loss / training_args.gradient_accumulation_steps
             loss.backward()
             
-            if (step + 1) % training_args.gradient_accumulation_steps == 0:
+            if (batch_idx + 1) % training_args.gradient_accumulation_steps == 0:
                 optimizer.step()
-                scheduler.step()
+                lr_scheduler.step()
                 optimizer.zero_grad()
+                global_step += 1
                 
                 # Log training metrics
-                global_step += 1
-                epoch_loss += loss.item() * training_args.gradient_accumulation_steps
-                progress_bar.set_postfix({"loss": loss.item() * training_args.gradient_accumulation_steps})
-                
-                if training_args.logging_steps > 0 and global_step % training_args.logging_steps == 0:
-                    writer.add_scalar("train/loss", loss.item() * training_args.gradient_accumulation_steps, global_step)
-                    writer.add_scalar("train/lr", scheduler.get_last_lr()[0], global_step)
-                
-                # Evaluation
-                should_evaluate = (
-                    training_args.eval_strategy == "steps" and 
-                    training_args.eval_steps > 0 and 
-                    global_step % training_args.eval_steps == 0
-                )
-                
-                if should_evaluate:
-                    val_metrics = evaluate_geolocation_model(
-                        model, 
-                        val_loader, 
-                        device, 
-                        with_context=with_context
-                    )
-                    for metric_name, metric_value in val_metrics.items():
-                        writer.add_scalar(f"eval/{metric_name}", metric_value, global_step)
-                    
-                    if val_metrics["loss"] < best_val_loss:
-                        best_val_loss = val_metrics["loss"]
-                        logger.info(f"New best model with validation loss: {best_val_loss:.4f}")
-                        model.save_pretrained(f"{training_args.output_dir}/best_model")
-                
-                # Save checkpoint
-                should_save = (
-                    training_args.save_strategy == "steps" and 
-                    training_args.save_steps > 0 and 
-                    global_step % training_args.save_steps == 0
-                )
-                
-                if should_save:
-                    model.save_pretrained(f"{training_args.output_dir}/checkpoint-{global_step}")
+                if global_step % training_args.logging_steps == 0:
+                    writer.add_scalar('train/loss', loss.item() * training_args.gradient_accumulation_steps, global_step)
+                    for loss_name, loss_value in loss_dict.items():
+                        writer.add_scalar(f'train/{loss_name}_loss', loss_value.item(), global_step)
+            
+            total_loss += loss.item() * training_args.gradient_accumulation_steps
         
-        # Epoch completed
-        avg_epoch_loss = epoch_loss / len(train_loader)
-        logger.info(f"Epoch {epoch+1} completed. Average loss: {avg_epoch_loss:.4f}")
-        
-        # Full evaluation at end of epoch
-        should_evaluate_epoch = (
-            training_args.eval_strategy == "epoch"
-        )
-        
-        if should_evaluate_epoch:
-            val_metrics = evaluate_geolocation_model(
-                model, 
-                val_loader, 
-                device, 
-                with_context=with_context
-            )
+        # Evaluate on validation set
+        if (epoch + 1) % training_args.eval_steps == 0:
+            val_metrics = evaluate_geolocation_model(model, val_loader, device, use_context)
+            
+            # Log validation metrics
             for metric_name, metric_value in val_metrics.items():
-                writer.add_scalar(f"eval/{metric_name}", metric_value, global_step)
-                logger.info(f"Validation {metric_name}: {metric_value:.4f}")
-        
-        # Save epoch checkpoint
-        should_save_epoch = (
-            training_args.save_strategy == "epoch"
-        )
-        
-        if should_save_epoch:
-            model.save_pretrained(f"{training_args.output_dir}/checkpoint-epoch-{epoch+1}")
+                writer.add_scalar(f'val/{metric_name}', metric_value, global_step)
+            
+            # Save best model
+            if val_metrics['loss'] < best_val_loss:
+                best_val_loss = val_metrics['loss']
+                model.save_pretrained(os.path.join(training_args.output_dir, 'best_model'))
     
     writer.close()
     return model
@@ -279,42 +255,39 @@ def evaluate_geolocation_model(
     model: Union[CLIPModel, str],
     val_loader: DataLoader,
     device: str = 'cuda',
-    with_context: bool = True
+    use_context: bool = True
 ) -> Dict[str, float]:
-    """Evaluate a geolocation model.
+    """Evaluate a geolocation model on a validation dataset.
     
     Args:
-        model: Model to evaluate or path to model
+        model: Model to evaluate
         val_loader: Validation data loader
-        device: Device to evaluate on
-        with_context: Whether the model was trained with contextual features
+        device: Device to evaluate on ('cuda' or 'cpu')
+        use_context: Whether the model was trained with contextual features
         
     Returns:
         Dictionary of evaluation metrics
     """
-    # Load model if path is provided
-    if isinstance(model, str):
-        model = CLIPModel.from_pretrained(model)
-        model.to(device)
-    
-    # Set model to evaluation mode
     model.eval()
     
     # Track metrics
     total_loss = 0
+    total_climate_loss = 0
+    total_month_loss = 0
+    total_location_loss = 0
     total_distance_loss = 0
+    
+    # Initialize loss function
+    loss_fn = GeoCLIPLoss(device)
+    
+    # Metrics for location accuracy
+    correct_state = 0
+    correct_county = 0
+    correct_city = 0
     total_samples = 0
     
-    # Initialize context-specific metrics if needed
-    if with_context:
-        total_climate_loss = 0
-        total_month_loss = 0
-        total_location_loss = 0
-        total_correct_climate = 0
-        total_correct_month = 0
-        total_correct_state = 0
-        total_correct_county = 0
-        total_correct_city = 0
+    # Metrics for coordinate prediction
+    total_distance_error = 0
     
     with torch.no_grad():
         for batch in tqdm(val_loader, desc="Evaluating"):
@@ -322,51 +295,64 @@ def evaluate_geolocation_model(
             inputs = {k: v.to(device) for k, v in batch.items()}
             
             # Forward pass
-            outputs = model(**inputs, is_training=False)
+            outputs = model(**inputs)
             
-            # Track losses
-            total_loss += outputs.loss.item() * len(batch)
-            total_distance_loss += outputs.loss_distance.item() * len(batch)
+            # Calculate loss using the GeoCLIPLoss class
+            loss, loss_dict = loss_fn(
+                outputs,
+                climate_labels=inputs.get('climate_labels') if use_context and 'climate_labels' in inputs else None,
+                month_labels=inputs.get('month_labels') if use_context and 'month_labels' in inputs else None,
+                state_labels=inputs.get('state_labels') if use_context and 'state_labels' in inputs else None,
+                county_labels=inputs.get('county_labels') if use_context and 'county_labels' in inputs else None,
+                city_labels=inputs.get('city_labels') if use_context and 'city_labels' in inputs else None,
+                lat_labels=inputs.get('lat_labels'),
+                lng_labels=inputs.get('lng_labels')
+            )
             
-            # Track context-specific metrics if needed
-            if with_context:
-                total_climate_loss += outputs.loss_climate.item() * len(batch)
-                total_month_loss += outputs.loss_month.item() * len(batch)
-                total_location_loss += outputs.loss_location.item() * len(batch)
+            # Accumulate losses
+            total_loss += loss.item()
+            total_climate_loss += loss_dict['climate'].item()
+            total_month_loss += loss_dict['month'].item()
+            total_location_loss += loss_dict['location'].item()
+            total_distance_loss += loss_dict['distance'].item()
+            
+            # Calculate location classification accuracy
+            if use_context and 'state_labels' in inputs:
+                state_preds = torch.argmax(outputs.preds_state, dim=1)
+                county_preds = torch.argmax(outputs.preds_county, dim=1)
+                city_preds = torch.argmax(outputs.preds_city, dim=1)
                 
-                # Track accuracies
-                climate_preds = outputs.preds_climate.argmax(dim=1)
-                month_preds = outputs.preds_month.argmax(dim=1)
-                state_preds = outputs.preds_state.argmax(dim=1)
-                county_preds = outputs.preds_county.argmax(dim=1)
-                city_preds = outputs.preds_city.argmax(dim=1)
-                
-                total_correct_climate += (climate_preds == inputs['climate_labels']).sum().item()
-                total_correct_month += (month_preds == inputs['month_labels']).sum().item()
-                total_correct_state += (state_preds == inputs['state_labels']).sum().item()
-                total_correct_county += (county_preds == inputs['county_labels']).sum().item()
-                total_correct_city += (city_preds == inputs['city_labels']).sum().item()
+                correct_state += (state_preds == inputs['state_labels']).sum().item()
+                correct_county += (county_preds == inputs['county_labels']).sum().item()
+                correct_city += (city_preds == inputs['city_labels']).sum().item()
+                total_samples += inputs['state_labels'].size(0)
             
-            total_samples += len(batch)
+            # Calculate coordinate prediction error
+            if 'lat_labels' in inputs and 'lng_labels' in inputs:
+                pred_coords = torch.stack([outputs.preds_lat, outputs.preds_lng], dim=1)
+                true_coords = torch.stack([inputs['lat_labels'], inputs['lng_labels']], dim=1)
+                distances = l2_distance_tensor(pred_coords, true_coords)
+                total_distance_error += distances.sum().item()
+                if total_samples == 0:  # If we haven't counted samples from classification
+                    total_samples += inputs['lat_labels'].size(0)
     
-    # Calculate base metrics
+    # Calculate average metrics
+    num_batches = len(val_loader)
     metrics = {
-        "loss": total_loss / total_samples,
-        "distance_loss": total_distance_loss / total_samples,
-        "average_distance_km": total_distance_loss / total_samples / DISTANCE_LOSS_SCALING
+        "loss": total_loss / num_batches,
+        "climate_loss": total_climate_loss / num_batches,
+        "month_loss": total_month_loss / num_batches,
+        "location_loss": total_location_loss / num_batches,
+        "distance_loss": total_distance_loss / num_batches,
+        "avg_distance_error": total_distance_error / total_samples if total_samples > 0 else float('inf')
     }
     
-    # Add context-specific metrics if needed
-    if with_context:
+    # Add classification accuracy metrics if applicable
+    if use_context and total_samples > 0:
         metrics.update({
-            "climate_loss": total_climate_loss / total_samples,
-            "month_loss": total_month_loss / total_samples,
-            "location_loss": total_location_loss / total_samples,
-            "climate_accuracy": total_correct_climate / total_samples,
-            "month_accuracy": total_correct_month / total_samples,
-            "state_accuracy": total_correct_state / total_samples,
-            "county_accuracy": total_correct_county / total_samples,
-            "city_accuracy": total_correct_city / total_samples
+            "state_accuracy": correct_state / total_samples,
+            "county_accuracy": correct_county / total_samples,
+            "city_accuracy": correct_city / total_samples
         })
     
     return metrics
@@ -445,4 +431,3 @@ def profile_model_performance(
     
     # Print key stats
     print(profiler.key_averages().table(sort_by="cuda_time_total", row_limit=10))
-    

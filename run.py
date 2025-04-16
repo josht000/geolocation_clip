@@ -69,23 +69,13 @@ GEO_TRAIN_ARGS = TrainingArguments(
     seed=330
 )
 
-def parse_args():
-    parser = argparse.ArgumentParser()
-    parser.add_argument('--function', type=str, default='pretrain', choices=['pretrain', 'train'])
-    parser.add_argument('--with_context', type=bool, default=True, help='Train with contextual features (climate, city, state, etc.)')
-    parser.add_argument('--pretrained_model', type=str, default='saved_models/checkpoint-1400', help='Pretrained model to use')
-    parser.add_argument('--model', type=str, default='clip', help='see get_model() and torchvision.models')
-    args = parser.parse_args()
-    return args
-
 def get_model(args):
     if args.model == 'geoclip':
         return GeoCLIP(args.pretrained_model, use_context=args.with_context)
     else:
         raise ValueError(f'Model {args.model} NEEDS TO BE IMPLEMENTED!')
 
-def main():
-    args = parse_args() 
+def main(args):
 
     # this is only for pretraining CLIP with the contrastive learning objective.
     if args.function == 'pretrain':
@@ -101,10 +91,12 @@ def main():
     elif args.function == 'train':
         train_ds = CLIPGeolocationDataset('train', 'datasets/osv-mini-129k', 
                                           'datasets/unique_city_list.txt', 
-                                          'datasets/unique_sub-region_list.txt', True, 224)
+                                          'datasets/unique_sub-region_list.txt', True, 224,
+                                          use_context=args.with_context)
         test_ds = CLIPGeolocationDataset('test', 'datasets/osv-mini-129k', 
                                          'datasets/unique_city_list.txt', 
-                                         'datasets/unique_sub-region_list.txt', False, 224)
+                                         'datasets/unique_sub-region_list.txt', False, 224,
+                                         use_context=args.with_context)
 
         model = get_model(args)
 
@@ -122,5 +114,16 @@ def main():
         raise NotImplementedError(f'Mode {args.function} is not implemented.')
 
 if __name__ == '__main__':
-    set_start_method('spawn')
-    main()
+    # set_start_method('spawn')
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--function', type=str, default='pretrain', choices=['pretrain', 'train'])
+    parser.add_argument('--with_context', action='store_true', help='Train with contextual features (climate, city, state, etc.)')
+    parser.add_argument('--pretrained_model', type=str, default='saved_models/checkpoint-1400', help='Pretrained model to use')
+    parser.add_argument('--model', type=str, default='clip', help='see get_model() and torchvision.models')
+    args = parser.parse_args()
+
+    print(f'  --> function: {args.function}')
+    print(f'  --> with_context: {args.with_context}')
+    print(f'  --> pretrained_model: {args.pretrained_model}')
+
+    main(args)
