@@ -52,7 +52,7 @@ PRETAIN_ARGS = TrainingArguments(
     )
 
 GEO_TRAIN_ARGS = TrainingArguments(
-    output_dir='saved_models/geoclip_no_context',
+    output_dir='saved_models/geoclip_with_context',
     remove_unused_columns=False,
     per_device_train_batch_size=32,
     per_device_eval_batch_size=64,

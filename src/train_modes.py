@@ -11,7 +11,7 @@ from transformers import Trainer, TrainingArguments, CLIPModel
 from warnings import filterwarnings
 
 from src.constants import *
-from src.models.train_losses import GeoCLIPLoss, l2_distance_tensor
+from src.models.train_losses import GeoCLIPLoss, l2_distance_tensor, calculate_batch_metrics
 
 filterwarnings('ignore', category=UserWarning, module='transformers')
 
@@ -197,13 +197,26 @@ def train_geolocation_model(
     for epoch in range(int(training_args.num_train_epochs)):
         model.train()
         total_loss = 0
+        total_climate_loss = 0
+        total_month_loss = 0
+        total_location_loss = 0
+        total_distance_loss = 0
         
-        for batch_idx, batch in enumerate(tqdm(train_loader, desc=f"Epoch {epoch + 1}")):
+        # Metrics for location accuracy
+        correct_state = 0
+        correct_county = 0
+        correct_city = 0
+        total_samples = 0
+        
+        # Metrics for coordinate prediction
+        total_distance_error = 0
+        
+        for batch_idx, batch in enumerate(tqdm(train_loader, desc=f"Epoch {epoch + 1}", ncols=20)):
             # Move inputs to device
             inputs = {k: v.to(device) for k, v in batch.items()}
             
             # Forward pass
-            outputs = model(**inputs)
+            outputs = model(inputs['pixel_values'])
             
             # Calculate loss using GeoCLIPLoss
             loss, loss_dict = loss_fn(
@@ -233,20 +246,71 @@ def train_geolocation_model(
                     for loss_name, loss_value in loss_dict.items():
                         writer.add_scalar(f'train/{loss_name}_loss', loss_value.item(), global_step)
             
+            # Accumulate losses
             total_loss += loss.item() * training_args.gradient_accumulation_steps
+            total_climate_loss += loss_dict['climate'].item()
+            total_month_loss += loss_dict['month'].item()
+            total_location_loss += loss_dict['location'].item()
+            total_distance_loss += loss_dict['distance'].item()
+            
+            # Calculate batch metrics
+            batch_metrics = calculate_batch_metrics(outputs, inputs, use_context)
+            
+            # Accumulate metrics
+            if 'correct_state' in batch_metrics:
+                correct_state += batch_metrics['correct_state']
+                correct_county += batch_metrics['correct_county']
+                correct_city += batch_metrics['correct_city']
+                total_samples += batch_metrics['total_samples']
+            
+            if 'total_distance_error' in batch_metrics:
+                total_distance_error += batch_metrics['total_distance_error']
+                if total_samples == 0:  # If we haven't counted samples from classification
+                    total_samples += batch_metrics['batch_size']
         
-        # Evaluate on validation set
-        if (epoch + 1) % training_args.eval_steps == 0:
-            val_metrics = evaluate_geolocation_model(model, val_loader, device, use_context)
-            
-            # Log validation metrics
-            for metric_name, metric_value in val_metrics.items():
-                writer.add_scalar(f'val/{metric_name}', metric_value, global_step)
-            
-            # Save best model
-            if val_metrics['loss'] < best_val_loss:
-                best_val_loss = val_metrics['loss']
-                model.save_pretrained(os.path.join(training_args.output_dir, 'best_model'))
+        # Calculate average training metrics for the epoch
+        num_train_batches = len(train_loader)
+        train_metrics = {
+            "loss": total_loss / num_train_batches,
+            "climate_loss": total_climate_loss / num_train_batches,
+            "month_loss": total_month_loss / num_train_batches,
+            "location_loss": total_location_loss / num_train_batches,
+            "distance_loss": total_distance_loss / num_train_batches,
+            "avg_distance_error": total_distance_error / total_samples if total_samples > 0 else float('inf')
+        }
+        
+        # Add classification accuracy metrics if applicable
+        if use_context and total_samples > 0:
+            train_metrics.update({
+                "state_accuracy": correct_state / total_samples,
+                "county_accuracy": correct_county / total_samples,
+                "city_accuracy": correct_city / total_samples
+            })
+        
+        # Log epoch training metrics
+        for metric_name, metric_value in train_metrics.items():
+            writer.add_scalar(f'train/epoch_{metric_name}', metric_value, epoch)
+        
+        # Evaluate on validation set (every epoch)
+        logger.info(f"Evaluating on validation set at epoch {epoch + 1}")
+        val_metrics = evaluate_geolocation_model(model, val_loader, device, use_context)
+        
+        # Log validation metrics
+        for metric_name, metric_value in val_metrics.items():
+            writer.add_scalar(f'val/{metric_name}', metric_value, epoch)
+        
+        # Print epoch summary
+        logger.info(f"Epoch {epoch + 1} Summary:")
+        logger.info(f"  Train Loss: {train_metrics['loss']:.4f}, Distance Loss: {train_metrics['distance_loss']:.4f}")
+        logger.info(f"  Val Loss: {val_metrics['loss']:.4f}, Distance Loss: {val_metrics['distance_loss']:.4f}")
+        if 'avg_distance_error' in val_metrics:
+            logger.info(f"  Val Avg Distance Error: {val_metrics['avg_distance_error']:.4f}")
+        
+        # Save best model
+        if val_metrics['loss'] < best_val_loss:
+            best_val_loss = val_metrics['loss']
+            model.save_pretrained(os.path.join(training_args.output_dir, 'best_model'))
+            logger.info(f"New best model saved with validation loss: {best_val_loss:.4f}")
     
     writer.close()
     return model
@@ -290,12 +354,12 @@ def evaluate_geolocation_model(
     total_distance_error = 0
     
     with torch.no_grad():
-        for batch in tqdm(val_loader, desc="Evaluating"):
+        for batch in tqdm(val_loader, desc="Evaluating", ncols=20):
             # Move inputs to device
             inputs = {k: v.to(device) for k, v in batch.items()}
             
             # Forward pass
-            outputs = model(**inputs)
+            outputs = model(inputs['pixel_values'])
             
             # Calculate loss using the GeoCLIPLoss class
             loss, loss_dict = loss_fn(
@@ -316,25 +380,20 @@ def evaluate_geolocation_model(
             total_location_loss += loss_dict['location'].item()
             total_distance_loss += loss_dict['distance'].item()
             
-            # Calculate location classification accuracy
-            if use_context and 'state_labels' in inputs:
-                state_preds = torch.argmax(outputs.preds_state, dim=1)
-                county_preds = torch.argmax(outputs.preds_county, dim=1)
-                city_preds = torch.argmax(outputs.preds_city, dim=1)
-                
-                correct_state += (state_preds == inputs['state_labels']).sum().item()
-                correct_county += (county_preds == inputs['county_labels']).sum().item()
-                correct_city += (city_preds == inputs['city_labels']).sum().item()
-                total_samples += inputs['state_labels'].size(0)
+            # Calculate batch metrics
+            batch_metrics = calculate_batch_metrics(outputs, inputs, use_context)
             
-            # Calculate coordinate prediction error
-            if 'lat_labels' in inputs and 'lng_labels' in inputs:
-                pred_coords = torch.stack([outputs.preds_lat, outputs.preds_lng], dim=1)
-                true_coords = torch.stack([inputs['lat_labels'], inputs['lng_labels']], dim=1)
-                distances = l2_distance_tensor(pred_coords, true_coords)
-                total_distance_error += distances.sum().item()
+            # Accumulate metrics
+            if 'correct_state' in batch_metrics:
+                correct_state += batch_metrics['correct_state']
+                correct_county += batch_metrics['correct_county']
+                correct_city += batch_metrics['correct_city']
+                total_samples += batch_metrics['total_samples']
+            
+            if 'total_distance_error' in batch_metrics:
+                total_distance_error += batch_metrics['total_distance_error']
                 if total_samples == 0:  # If we haven't counted samples from classification
-                    total_samples += inputs['lat_labels'].size(0)
+                    total_samples += batch_metrics['batch_size']
     
     # Calculate average metrics
     num_batches = len(val_loader)
@@ -414,7 +473,7 @@ def profile_model_performance(
     logger.info(f"Profiling model for {num_steps} steps with batch size {batch_size}")
     
     with profiler:
-        for step, batch in enumerate(tqdm(dataloader, desc="Profiling")):
+        for step, batch in enumerate(tqdm(dataloader, desc="Profiling", ncols=20)):
             if step >= num_steps:
                 break
                 
@@ -422,7 +481,7 @@ def profile_model_performance(
             inputs = {k: v.to(device) for k, v in batch.items()}
             
             # Forward pass
-            outputs = model(**inputs)
+            outputs = model(inputs['pixel_values'])
             
             # Record step
             profiler.step()

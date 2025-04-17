@@ -96,4 +96,52 @@ class GeoCLIPLoss:
             'distance': loss_distance
         }
         
-        return total_loss, losses 
+        return total_loss, losses
+
+def calculate_batch_metrics(model_output, inputs, use_context=True):
+    """Calculate metrics for a single batch of data.
+    
+    This function handles the calculation of location accuracy and distance error
+    for a single batch, without the data loading and loop structure.
+    
+    Args:
+        model_output: Output from the model
+        inputs: Dictionary of input tensors
+        use_context: Whether to use contextual features
+        
+    Returns:
+        Dictionary containing batch metrics
+    """
+    metrics = {}
+    
+    # Calculate location classification accuracy
+    if use_context and 'state_labels' in inputs:
+        state_preds = torch.argmax(model_output.preds_state, dim=1)
+        county_preds = torch.argmax(model_output.preds_county, dim=1)
+        city_preds = torch.argmax(model_output.preds_city, dim=1)
+        
+        correct_state = (state_preds == inputs['state_labels']).sum().item()
+        correct_county = (county_preds == inputs['county_labels']).sum().item()
+        correct_city = (city_preds == inputs['city_labels']).sum().item()
+        total_samples = inputs['state_labels'].size(0)
+        
+        metrics.update({
+            "correct_state": correct_state,
+            "correct_county": correct_county,
+            "correct_city": correct_city,
+            "total_samples": total_samples
+        })
+    
+    # Calculate coordinate prediction error
+    if 'lat_labels' in inputs and 'lng_labels' in inputs:
+        pred_coords = torch.stack([model_output.preds_lat, model_output.preds_lng], dim=1)
+        true_coords = torch.stack([inputs['lat_labels'], inputs['lng_labels']], dim=1)
+        distances = l2_distance_tensor(pred_coords, true_coords)
+        total_distance_error = distances.sum().item()
+        
+        metrics.update({
+            "total_distance_error": total_distance_error,
+            "batch_size": inputs['lat_labels'].size(0)
+        })
+    
+    return metrics 
