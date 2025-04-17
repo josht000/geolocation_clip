@@ -2,70 +2,68 @@ import os
 import json
 import torch
 import torch.nn as nn
-from transformers import CLIPVisionModel as BaseCLIPModel
+import torchvision.models as models
 from collections import namedtuple
-import math
-from warnings import filterwarnings
 
 from src.constants import *
-from src.models.auxiliary_heads import AuxiliaryGeo 
-
-filterwarnings('ignore', category=UserWarning, module='transformers')
+from src.models.auxiliary_heads import AuxiliaryPredictionHeads, LocationCoordinateHead
 
 # Named Tuple for model outputs
 ModelOutput = namedtuple('ModelOutput', 'preds_climate preds_month preds_state preds_county preds_city preds_lat preds_lng')
 
-class GeoCLIP(nn.Module):
-    def __init__(self, model_name: str = 'openai/clip-vit-base-patch32',
-                 use_context: bool = True,
-                 freeze_base_model: bool = True):
-        """Initialize CLIP model with optional auxiliary prediction heads.
+class GeoResNet(nn.Module):
+    def __init__(self, model_name: str = 'resnet50', use_context: bool = True, pretrained: bool = True):
+        """Initialize ResNet model with optional auxiliary prediction heads.
         
         Model Description:
-            - Base CLIP model
+            - Base ResNet model
             - Location Coordinate: lat, lon
             - Auxiliary prediction heads (only used if use_context is True)
                 - Location Classification: state, county, city
                 - Climate Classification: Climate
                 - Month Classification: Month
-            
-        Args:
-            model_name (str): Name of the base CLIP model to use or a path to a checkpoint dir.
-            use_context (bool): Whether to use contextual features (climate, city, state, etc.)
         """
-        super(GeoCLIP, self).__init__()
+        super(GeoResNet, self).__init__()
         
-        # Base CLIP model
-        self.base_model = BaseCLIPModel.from_pretrained(model_name)
-        self.hidden_size = self.base_model.config.hidden_size
+        # Base ResNet model
+        resnet_models = {
+            'resnet18': (models.resnet18, 512),
+            'resnet34': (models.resnet34, 512),
+            'resnet50': (models.resnet50, 2048),
+            'resnet101': (models.resnet101, 2048),
+            'resnet152': (models.resnet152, 2048)
+        }
+        
+        if model_name not in resnet_models:
+            raise ValueError(f"Unsupported ResNet model: {model_name}")
+            
+        model_fn, self.hidden_size = resnet_models[model_name]
+        self.base_model = nn.Sequential(*list(model_fn(pretrained=pretrained).children())[:-1])
+        
         self.use_context = use_context
         
         # Auxiliary prediction heads (only used if use_context is True)
         if use_context:
-            self.auxiliary_heads = AuxiliaryGeo (self.hidden_size)
+            self.auxiliary_heads = AuxiliaryPredictionHeads(self.hidden_size)
             
             # Calculate input size for location coordinate head with auxiliary features
             aux_input_size = (
+                self.hidden_size +  # Base embeddings
                 NUM_CLIMATES +      # Climate logits
                 NUM_MONTHS +        # Month logits
                 NUM_STATES +        # State logits
                 NUM_COUNTIES +      # County logits
                 NUM_CITIES          # City logits
             )
-            self.location_coord_input_size = aux_input_size + self.hidden_size
+            
+            # Location prediction head (using auxiliary features)
+            self.location_coord_head = LocationCoordinateHead(aux_input_size, use_auxiliary=True)
         else:
-            self.location_coord_input_size = self.hidden_size
-
-        # lat/lng prediction head
-        self.location_coord_head = nn.Sequential(
-            nn.Linear(self.location_coord_input_size, 512),
-            nn.ReLU(),
-            nn.Linear(512, 2)  # Outputs [latitude, longitude]
-        )
-
-        if freeze_base_model:
-            print("Freezing base model (except last layer).")
-            self._freeze_base_model()
+            # Simple coordinate prediction head without context
+            self.location_coord_head = LocationCoordinateHead(self.hidden_size, use_auxiliary=False)
+        
+        # Freeze base model except last layer
+        self._freeze_base_model()
         
     def _freeze_base_model(self):
         """Freeze all layers of base model except the last one."""
@@ -73,20 +71,24 @@ class GeoCLIP(nn.Module):
             param.requires_grad = False
             
         # Unfreeze last layer
-        for param in self.base_model.vision_model.encoder.layers[-1].parameters():
+        for param in self.base_model[-1].parameters():
             param.requires_grad = True
             
-    def forward(self, pixel_values):
+    def forward(self, pixel_values=None, **kwargs):
         """Forward pass through the model.
-        Returns: ModelOutput: Named tuple containing all predictions
+    
+        Args:
+            pixel_values: Input images
+
+        Returns:
+            ModelOutput: Named tuple containing all predictions
         """
         # Get base model embeddings
-        assert pixel_values is not None, "pixel_values must be provided!"
-        outputs = self.base_model(pixel_values=pixel_values)
-        image_embeddings = outputs.pooler_output
+        image_embeddings = self.base_model(pixel_values)
+        image_embeddings = image_embeddings.view(image_embeddings.size(0), -1)  # Flatten
         
-        # Get auxiliary predictions if use_context is True
         if self.use_context:
+            # Get auxiliary predictions
             aux_output = self.auxiliary_heads(image_embeddings)
             
             # Location coordinate predictions (latitude, longitude)
@@ -121,17 +123,20 @@ class GeoCLIP(nn.Module):
         
     def save_pretrained(self, save_directory: str):
         """Save the model's state and configuration to a directory.
+        
+        Args:
+            save_directory (str): Directory to save the model to.
         """
        
         # Create the directory if it doesn't exist
         os.makedirs(save_directory, exist_ok=True)
         
         # Save the model's state dict
-        torch.save(self.state_dict(), os.path.join(save_directory, "geo_clip.pt"))
+        torch.save(self.state_dict(), os.path.join(save_directory, "geo_resnet.pt"))
         
         # Save model configuration
         config = {
-            "model_name": self.base_model.name_or_path,
+            "model_name": "resnet50",  # Default for now
             "hidden_size": self.hidden_size,
             "use_context": self.use_context,
             "num_climates": NUM_CLIMATES,
@@ -143,15 +148,12 @@ class GeoCLIP(nn.Module):
         
         with open(os.path.join(save_directory, "config.json"), "w") as f:
             json.dump(config, f, indent=2)
-            
-        # Save the base model configuration
-        self.base_model.config.save_pretrained(save_directory)
         
         print(f"Model saved to {save_directory}")
         
     @classmethod
     def from_pretrained(model_path: str, use_context: bool = True):
-        model = GeoCLIP()
-        state_dict = torch.load(os.path.join(model_path, "geo_clip.pt"))
+        model = GeoResNet()
+        state_dict = torch.load(os.path.join(model_path, "geo_resnet.pt"))
         model.load_state_dict(state_dict)
         return model

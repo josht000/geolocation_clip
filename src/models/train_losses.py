@@ -4,14 +4,8 @@ import math
 from src.constants import *
 
 def haversine_distance(lat1, lon1, lat2, lon2):
-    """Calculate the Haversine distance between two points on Earth.
-    
-    Args:
-        lat1, lon1: Latitude and longitude of first point in degrees
-        lat2, lon2: Latitude and longitude of second point in degrees
-        
-    Returns:
-        Distance in kilometers
+    """Calculate the Haversine distance (in deg) between two points on Earth.
+    Returns: Distance in kilometers
     """
     R = 6371  # Earth's radius in kilometers
     
@@ -27,35 +21,20 @@ def haversine_distance(lat1, lon1, lat2, lon2):
     return R * c
 
 def l2_distance(lat1, lon1, lat2, lon2):
-    """Calculate the L2 (Euclidean) distance between two points.
-    
-    Args:
-        lat1, lon1: Latitude and longitude of first point in degrees
-        lat2, lon2: Latitude and longitude of second point in degrees
-        
-    Returns:
-        L2 distance in degrees
+    """Calculate the L2 (Euclidean) distance (degrees) between two points.
+    Returns: L2 distance in degrees
     """
     return math.sqrt((lat2 - lat1)**2 + (lon2 - lon1)**2)
 
 def l2_distance_tensor(pred_coords, true_coords):
     """Calculate L2 distance between predicted and true coordinates using tensors.
-    
-    Args:
-        pred_coords: Tensor of shape [batch_size, 2] containing predicted [lat, lng]
-        true_coords: Tensor of shape [batch_size, 2] containing true [lat, lng]
-        
-    Returns:
-        Tensor of shape [batch_size] containing L2 distances
+    Returns: Tensor of shape [batch_size] containing L2 distances
     """
     return torch.sqrt(torch.sum((pred_coords - true_coords) ** 2, dim=1))
 
 class GeoCLIPLoss:
     def __init__(self, device):
         """Initialize loss functions for GeoCLIP model.
-        
-        Args:
-            device: Device to place tensors on (cuda/cpu)
         """
         self.device = device
         self.climate_loss = nn.CrossEntropyLoss()
@@ -66,19 +45,7 @@ class GeoCLIPLoss:
                  state_labels=None, county_labels=None, city_labels=None, 
                  lat_labels=None, lng_labels=None):
         """Calculate all losses for the GeoCLIP model.
-        
-        Args:
-            model_output: ModelOutput named tuple containing all predictions
-            climate_labels: Climate classification labels
-            month_labels: Month classification labels
-            state_labels: State classification labels
-            county_labels: County classification labels
-            city_labels: City classification labels
-            lat_labels: Latitude regression labels
-            lng_labels: Longitude regression labels
-            
-        Returns:
-            tuple: (total_loss, dict of individual losses)
+        Returns: tuple: (total_loss, dict of individual losses)
         """
         # Initialize losses
         loss_climate = torch.tensor(0.0, device=self.device)
