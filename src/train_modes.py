@@ -211,7 +211,7 @@ def train_geolocation_model(
         # Metrics for coordinate prediction
         total_distance_error = 0
         
-        for batch_idx, batch in enumerate(tqdm(train_loader, desc=f"Epoch {epoch + 1}", ncols=45)):
+        for batch_idx, batch in enumerate(tqdm(train_loader, desc=f"Epoch {epoch + 1}", ncols=80)):
             # Move inputs to device
             inputs = {k: v.to(device) for k, v in batch.items()}
             
@@ -354,7 +354,7 @@ def evaluate_geolocation_model(
     total_distance_error = 0
     
     with torch.no_grad():
-        for batch in tqdm(val_loader, desc="Evaluating", ncols=45):
+        for batch in tqdm(val_loader, desc="Evaluating", ncols=80):
             # Move inputs to device
             inputs = {k: v.to(device) for k, v in batch.items()}
             
@@ -473,7 +473,7 @@ def profile_model_performance(
     logger.info(f"Profiling model for {num_steps} steps with batch size {batch_size}")
     
     with profiler:
-        for step, batch in enumerate(tqdm(dataloader, desc="Profiling", ncols=45)):
+        for step, batch in enumerate(tqdm(dataloader, desc="Profiling", ncols=80)):
             if step >= num_steps:
                 break
                 
