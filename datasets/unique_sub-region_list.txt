@@ -1,0 +1,564 @@
+Ada County_Idaho_US
+Adair County_Oklahoma_US
+Adams County_Nebraska_US
+Albany County_Wyoming_US
+Alfalfa County_Oklahoma_US
+Allen County_Kansas_US
+Anderson County_Kansas_US
+Andrews County_Texas_US
+Angelina County_Texas_US
+Antelope County_Nebraska_US
+Aransas County_Texas_US
+Archer County_Texas_US
+Armstrong County_Texas_US
+Atascosa County_Texas_US
+Atchison County_Kansas_US
+Atoka County_Oklahoma_US
+Austin County_Texas_US
+Baker County_Oregon_US
+Bannock County_Idaho_US
+Barber County_Kansas_US
+Barton County_Kansas_US
+Bastrop County_Texas_US
+Baylor County_Texas_US
+Bear Lake County_Idaho_US
+Beaverhead County_Montana_US
+Beckham County_Oklahoma_US
+Bee County_Texas_US
+Bell County_Texas_US
+Benewah County_Idaho_US
+Benton County_Oregon_US
+Bernalillo County_New Mexico_US
+Bexar County_Texas_US
+Big Horn County_Montana_US
+Big Horn County_Wyoming_US
+Bingham County_Idaho_US
+Blaine County_Idaho_US
+Blaine County_Montana_US
+Blanco County_Texas_US
+Boise County_Idaho_US
+Bonner County_Idaho_US
+Bonneville County_Idaho_US
+Borden County_Texas_US
+Bosque County_Texas_US
+Boundary County_Idaho_US
+Bourbon County_Kansas_US
+Bowie County_Texas_US
+Brazoria County_Texas_US
+Brazos County_Texas_US
+Brewster County_Texas_US
+Broadwater County_Montana_US
+Brown County_Kansas_US
+Brown County_Texas_US
+Bryan County_Oklahoma_US
+Buffalo County_Nebraska_US
+Burleson County_Texas_US
+Burnet County_Texas_US
+Burt County_Nebraska_US
+Butler County_Kansas_US
+Butler County_Nebraska_US
+Butte County_Idaho_US
+Caddo County_Oklahoma_US
+Caldwell County_Texas_US
+Callahan County_Texas_US
+Cameron County_Texas_US
+Campbell County_Wyoming_US
+Canyon County_Idaho_US
+Carbon County_Montana_US
+Carbon County_Wyoming_US
+Carson City_Nevada_US
+Carter County_Montana_US
+Carter County_Oklahoma_US
+Cascade County_Montana_US
+Cass County_Nebraska_US
+Cass County_Texas_US
+Cassia County_Idaho_US
+Catron County_New Mexico_US
+Cedar County_Nebraska_US
+Chambers County_Texas_US
+Chase County_Kansas_US
+Chase County_Nebraska_US
+Chautauqua County_Kansas_US
+Chaves County_New Mexico_US
+Cherokee County_Kansas_US
+Cherokee County_Oklahoma_US
+Cherry County_Nebraska_US
+Cheyenne County_Kansas_US
+Cheyenne County_Nebraska_US
+Childress County_Texas_US
+Churchill County_Nevada_US
+Cibola County_New Mexico_US
+Cimarron County_Oklahoma_US
+Clackamas County_Oregon_US
+Clark County_Idaho_US
+Clark County_Nevada_US
+Clatsop County_Oregon_US
+Clay County_Kansas_US
+Clay County_Nebraska_US
+Clearwater County_Idaho_US
+Cleveland County_Oklahoma_US
+Cloud County_Kansas_US
+Coal County_Oklahoma_US
+Coffey County_Kansas_US
+Colfax County_New Mexico_US
+Collin County_Texas_US
+Colorado County_Texas_US
+Columbia County_Oregon_US
+Comal County_Texas_US
+Comanche County_Kansas_US
+Comanche County_Texas_US
+Concho County_Texas_US
+Converse County_Wyoming_US
+Cooke County_Texas_US
+Coos County_Oregon_US
+Coryell County_Texas_US
+Cowley County_Kansas_US
+Craig County_Oklahoma_US
+Crawford County_Kansas_US
+Creek County_Oklahoma_US
+Crook County_Wyoming_US
+Culberson County_Texas_US
+Cuming County_Nebraska_US
+Curry County_New Mexico_US
+Curry County_Oregon_US
+Custer County_Idaho_US
+Custer County_Oklahoma_US
+Dakota County_Nebraska_US
+Dallam County_Texas_US
+Dallas County_Texas_US
+Dawson County_Montana_US
+Dawson County_Nebraska_US
+Dawson County_Texas_US
+De Baca County_New Mexico_US
+DeWitt County_Texas_US
+Decatur County_Kansas_US
+Deer Lodge County_Montana_US
+Delaware County_Oklahoma_US
+Denton County_Texas_US
+Deschutes County_Oregon_US
+Deuel County_Nebraska_US
+Dickens County_Texas_US
+Dickinson County_Kansas_US
+Dimmit County_Texas_US
+Dixon County_Nebraska_US
+Dodge County_Nebraska_US
+Dona Ana County_New Mexico_US
+Doniphan County_Kansas_US
+Donley County_Texas_US
+Douglas County_Kansas_US
+Douglas County_Nebraska_US
+Douglas County_Nevada_US
+Douglas County_Oregon_US
+Dundy County_Nebraska_US
+Eastland County_Texas_US
+Ector County_Texas_US
+Eddy County_New Mexico_US
+Edwards County_Kansas_US
+El Paso County_Texas_US
+Elk County_Kansas_US
+Elko County_Nevada_US
+Ellis County_Kansas_US
+Ellis County_Texas_US
+Ellsworth County_Kansas_US
+Elmore County_Idaho_US
+Erath County_Texas_US
+Esmeralda County_Nevada_US
+Eureka County_Nevada_US
+Fallon County_Montana_US
+Falls County_Texas_US
+Fayette County_Texas_US
+Fergus County_Montana_US
+Fillmore County_Nebraska_US
+Finney County_Kansas_US
+Fisher County_Texas_US
+Flathead County_Montana_US
+Ford County_Kansas_US
+Fort Bend County_Texas_US
+Franklin County_Kansas_US
+Franklin County_Nebraska_US
+Franklin County_Texas_US
+Freestone County_Texas_US
+Fremont County_Wyoming_US
+Frio County_Texas_US
+Frontier County_Nebraska_US
+Furnas County_Nebraska_US
+Gage County_Nebraska_US
+Gaines County_Texas_US
+Gallatin County_Montana_US
+Galveston County_Texas_US
+Garden County_Nebraska_US
+Garfield County_Oklahoma_US
+Garvin County_Oklahoma_US
+Garza County_Texas_US
+Geary County_Kansas_US
+Gem County_Idaho_US
+Gillespie County_Texas_US
+Glacier County_Montana_US
+Glasscock County_Texas_US
+Golden Valley County_Montana_US
+Gonzales County_Texas_US
+Gooding County_Idaho_US
+Goshen County_Wyoming_US
+Gosper County_Nebraska_US
+Gove County_Kansas_US
+Graham County_Kansas_US
+Granite County_Montana_US
+Grant County_Kansas_US
+Grant County_Oregon_US
+Gray County_Kansas_US
+Grayson County_Texas_US
+Greeley County_Kansas_US
+Greenwood County_Kansas_US
+Gregg County_Texas_US
+Grimes County_Texas_US
+Guadalupe County_New Mexico_US
+Guadalupe County_Texas_US
+Hale County_Texas_US
+Hall County_Nebraska_US
+Hall County_Texas_US
+Hamilton County_Kansas_US
+Hamilton County_Nebraska_US
+Hamilton County_Texas_US
+Harlan County_Nebraska_US
+Harney County_Oregon_US
+Harper County_Kansas_US
+Harris County_Texas_US
+Harrison County_Texas_US
+Hartley County_Texas_US
+Harvey County_Kansas_US
+Haskell County_Kansas_US
+Hayes County_Nebraska_US
+Hays County_Texas_US
+Henderson County_Texas_US
+Hidalgo County_New Mexico_US
+Hill County_Montana_US
+Hill County_Texas_US
+Hitchcock County_Nebraska_US
+Hodgeman County_Kansas_US
+Holt County_Nebraska_US
+Hood County_Texas_US
+Hood River County_Oregon_US
+Hopkins County_Texas_US
+Hot Springs County_Wyoming_US
+Houston County_Texas_US
+Howard County_Nebraska_US
+Howard County_Texas_US
+Hudspeth County_Texas_US
+Humboldt County_Nevada_US
+Hunt County_Texas_US
+Idaho County_Idaho_US
+Jack County_Texas_US
+Jackson County_Kansas_US
+Jackson County_Oregon_US
+Jackson County_Texas_US
+Jasper County_Texas_US
+Jefferson County_Idaho_US
+Jefferson County_Kansas_US
+Jefferson County_Montana_US
+Jefferson County_Nebraska_US
+Jefferson County_Oklahoma_US
+Jefferson County_Oregon_US
+Jefferson County_Texas_US
+Jerome County_Idaho_US
+Jewell County_Kansas_US
+Johnson County_Kansas_US
+Johnson County_Nebraska_US
+Johnson County_Texas_US
+Johnson County_Wyoming_US
+Johnston County_Oklahoma_US
+Jones County_Texas_US
+Josephine County_Oregon_US
+Judith Basin County_Montana_US
+Kaufman County_Texas_US
+Kay County_Oklahoma_US
+Kearney County_Nebraska_US
+Kearny County_Kansas_US
+Keith County_Nebraska_US
+Kendall County_Texas_US
+Kerr County_Texas_US
+Kimball County_Nebraska_US
+King County_Texas_US
+Kingman County_Kansas_US
+Kinney County_Texas_US
+Kiowa County_Kansas_US
+Klamath County_Oregon_US
+Knox County_Nebraska_US
+Kootenai County_Idaho_US
+Labette County_Kansas_US
+Lake County_Montana_US
+Lake County_Oregon_US
+Lamar County_Texas_US
+Lampasas County_Texas_US
+Lancaster County_Nebraska_US
+Lane County_Kansas_US
+Lane County_Oregon_US
+Laramie County_Wyoming_US
+Latah County_Idaho_US
+Latimer County_Oklahoma_US
+Lavaca County_Texas_US
+Le Flore County_Oklahoma_US
+Lea County_New Mexico_US
+Leavenworth County_Kansas_US
+Lee County_Texas_US
+Lemhi County_Idaho_US
+Leon County_Texas_US
+Lewis County_Idaho_US
+Lewis and Clark County_Montana_US
+Lincoln County_Idaho_US
+Lincoln County_Kansas_US
+Lincoln County_Montana_US
+Lincoln County_Nebraska_US
+Lincoln County_Nevada_US
+Lincoln County_New Mexico_US
+Lincoln County_Oklahoma_US
+Lincoln County_Oregon_US
+Lincoln County_Wyoming_US
+Linn County_Kansas_US
+Linn County_Oregon_US
+Live Oak County_Texas_US
+Llano County_Texas_US
+Logan County_Kansas_US
+Logan County_Oklahoma_US
+Los Alamos County_New Mexico_US
+Love County_Oklahoma_US
+Lubbock County_Texas_US
+Luna County_New Mexico_US
+Lyon County_Kansas_US
+Lyon County_Nevada_US
+Madison County_Idaho_US
+Madison County_Montana_US
+Madison County_Nebraska_US
+Madison County_Texas_US
+Malheur County_Oregon_US
+Marion County_Kansas_US
+Marion County_Oregon_US
+Marshall County_Kansas_US
+Marshall County_Oklahoma_US
+Martin County_Texas_US
+Matagorda County_Texas_US
+Mayes County_Oklahoma_US
+McClain County_Oklahoma_US
+McCulloch County_Texas_US
+McIntosh County_Oklahoma_US
+McKinley County_New Mexico_US
+McLennan County_Texas_US
+McPherson County_Kansas_US
+Meade County_Kansas_US
+Meagher County_Montana_US
+Medina County_Texas_US
+Merrick County_Nebraska_US
+Miami County_Kansas_US
+Midland County_Texas_US
+Milam County_Texas_US
+Mills County_Texas_US
+Mineral County_Montana_US
+Mineral County_Nevada_US
+Minidoka County_Idaho_US
+Missoula County_Montana_US
+Mitchell County_Kansas_US
+Montgomery County_Kansas_US
+Montgomery County_Texas_US
+Mora County_New Mexico_US
+Morrill County_Nebraska_US
+Morris County_Kansas_US
+Morris County_Texas_US
+Morrow County_Oregon_US
+Morton County_Kansas_US
+Multnomah County_Oregon_US
+Murray County_Oklahoma_US
+Muskogee County_Oklahoma_US
+Musselshell County_Montana_US
+Nacogdoches County_Texas_US
+Nance County_Nebraska_US
+Natrona County_Wyoming_US
+Navarro County_Texas_US
+Nemaha County_Kansas_US
+Nemaha County_Nebraska_US
+Neosho County_Kansas_US
+Ness County_Kansas_US
+Nez Perce County_Idaho_US
+Noble County_Oklahoma_US
+Nolan County_Texas_US
+Norton County_Kansas_US
+Nowata County_Oklahoma_US
+Nuckolls County_Nebraska_US
+Nueces County_Texas_US
+Nye County_Nevada_US
+Okfuskee County_Oklahoma_US
+Oklahoma County_Oklahoma_US
+Okmulgee County_Oklahoma_US
+Oldham County_Texas_US
+Oneida County_Idaho_US
+Osage County_Kansas_US
+Osage County_Oklahoma_US
+Osborne County_Kansas_US
+Otero County_New Mexico_US
+Otoe County_Nebraska_US
+Ottawa County_Kansas_US
+Ottawa County_Oklahoma_US
+Owyhee County_Idaho_US
+Palo Pinto County_Texas_US
+Park County_Montana_US
+Park County_Wyoming_US
+Parker County_Texas_US
+Pawnee County_Kansas_US
+Pawnee County_Nebraska_US
+Pawnee County_Oklahoma_US
+Payette County_Idaho_US
+Payne County_Oklahoma_US
+Pershing County_Nevada_US
+Phelps County_Nebraska_US
+Phillips County_Kansas_US
+Phillips County_Montana_US
+Pierce County_Nebraska_US
+Pittsburg County_Oklahoma_US
+Platte County_Nebraska_US
+Platte County_Wyoming_US
+Polk County_Nebraska_US
+Polk County_Oregon_US
+Polk County_Texas_US
+Pontotoc County_Oklahoma_US
+Pottawatomie County_Kansas_US
+Pottawatomie County_Oklahoma_US
+Potter County_Texas_US
+Powder River County_Montana_US
+Powell County_Montana_US
+Power County_Idaho_US
+Pratt County_Kansas_US
+Presidio County_Texas_US
+Quay County_New Mexico_US
+Randall County_Texas_US
+Ravalli County_Montana_US
+Rawlins County_Kansas_US
+Red River County_Texas_US
+Red Willow County_Nebraska_US
+Reno County_Kansas_US
+Republic County_Kansas_US
+Rice County_Kansas_US
+Richardson County_Nebraska_US
+Riley County_Kansas_US
+Rio Arriba County_New Mexico_US
+Robertson County_Texas_US
+Rockwall County_Texas_US
+Rogers County_Oklahoma_US
+Rooks County_Kansas_US
+Roosevelt County_New Mexico_US
+Rosebud County_Montana_US
+Runnels County_Texas_US
+Rush County_Kansas_US
+Russell County_Kansas_US
+Sabine County_Texas_US
+Saline County_Kansas_US
+Saline County_Nebraska_US
+San Jacinto County_Texas_US
+San Juan County_New Mexico_US
+San Miguel County_New Mexico_US
+San Patricio County_Texas_US
+Sanders County_Montana_US
+Sandoval County_New Mexico_US
+Santa Fe County_New Mexico_US
+Sarpy County_Nebraska_US
+Saunders County_Nebraska_US
+Scott County_Kansas_US
+Scotts Bluff County_Nebraska_US
+Scurry County_Texas_US
+Sedgwick County_Kansas_US
+Seminole County_Oklahoma_US
+Sequoyah County_Oklahoma_US
+Seward County_Kansas_US
+Seward County_Nebraska_US
+Shackelford County_Texas_US
+Shawnee County_Kansas_US
+Sheridan County_Kansas_US
+Sheridan County_Nebraska_US
+Sheridan County_Wyoming_US
+Sherman County_Kansas_US
+Sherman County_Nebraska_US
+Sherman County_Oregon_US
+Sherman County_Texas_US
+Shoshone County_Idaho_US
+Sierra County_New Mexico_US
+Silver Bow County_Montana_US
+Smith County_Kansas_US
+Smith County_Texas_US
+Socorro County_New Mexico_US
+Somervell County_Texas_US
+Stafford County_Kansas_US
+Stanton County_Kansas_US
+Stephens County_Oklahoma_US
+Stephens County_Texas_US
+Sterling County_Texas_US
+Stevens County_Kansas_US
+Stillwater County_Montana_US
+Storey County_Nevada_US
+Sublette County_Wyoming_US
+Sumner County_Kansas_US
+Sweet Grass County_Montana_US
+Sweetwater County_Wyoming_US
+Swisher County_Texas_US
+Taos County_New Mexico_US
+Tarrant County_Texas_US
+Taylor County_Texas_US
+Terrell County_Texas_US
+Terry County_Texas_US
+Teton County_Idaho_US
+Teton County_Montana_US
+Teton County_Wyoming_US
+Texas County_Oklahoma_US
+Thayer County_Nebraska_US
+Thomas County_Kansas_US
+Thurston County_Nebraska_US
+Tillamook County_Oregon_US
+Titus County_Texas_US
+Tom Green County_Texas_US
+Torrance County_New Mexico_US
+Travis County_Texas_US
+Trego County_Kansas_US
+Tulsa County_Oklahoma_US
+Twin Falls County_Idaho_US
+Uinta County_Wyoming_US
+Umatilla County_Oregon_US
+Union County_New Mexico_US
+Union County_Oregon_US
+Uvalde County_Texas_US
+Val Verde County_Texas_US
+Valencia County_New Mexico_US
+Valley County_Idaho_US
+Valley County_Montana_US
+Van Zandt County_Texas_US
+Victoria County_Texas_US
+Wabaunsee County_Kansas_US
+Wagoner County_Oklahoma_US
+Walker County_Texas_US
+Wallace County_Kansas_US
+Waller County_Texas_US
+Wasco County_Oregon_US
+Washakie County_Wyoming_US
+Washington County_Idaho_US
+Washington County_Kansas_US
+Washington County_Nebraska_US
+Washington County_Oklahoma_US
+Washington County_Oregon_US
+Washington County_Texas_US
+Washita County_Oklahoma_US
+Washoe County_Nevada_US
+Wayne County_Nebraska_US
+Webb County_Texas_US
+Webster County_Nebraska_US
+Weston County_Wyoming_US
+Wharton County_Texas_US
+Wheatland County_Montana_US
+Wheeler County_Texas_US
+White Pine County_Nevada_US
+Wichita County_Kansas_US
+Wichita County_Texas_US
+Williamson County_Texas_US
+Wilson County_Kansas_US
+Wise County_Texas_US
+Wood County_Texas_US
+Woodson County_Kansas_US
+Wyandotte County_Kansas_US
+Yamhill County_Oregon_US
+Yellowstone County_Montana_US
+York County_Nebraska_US
+Zavala County_Texas_US
