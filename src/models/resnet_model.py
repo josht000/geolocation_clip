@@ -6,7 +6,7 @@ import torchvision.models as models
 from collections import namedtuple
 
 from src.constants import *
-from src.models.auxiliary_heads import AuxiliaryPredictionHeads, LocationCoordinateHead
+from src.models.auxiliary_heads import AuxiliaryGeo, LocationCoordinateHead
 
 # Named Tuple for model outputs
 ModelOutput = namedtuple('ModelOutput', 'preds_climate preds_month preds_state preds_county preds_city preds_lat preds_lng')
@@ -44,7 +44,7 @@ class GeoResNet(nn.Module):
         
         # Auxiliary prediction heads (only used if use_context is True)
         if use_context:
-            self.auxiliary_heads = AuxiliaryPredictionHeads(self.hidden_size)
+            self.auxiliary_heads = AuxiliaryGeo(self.hidden_size)
             
             # Calculate input size for location coordinate head with auxiliary features
             aux_input_size = (

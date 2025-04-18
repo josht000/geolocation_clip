@@ -10,6 +10,7 @@ from torchvision.models import *
 from src.train_modes import pretrain, train_geolocation_model
 from src.datasets import PretrainDatasetOSVMini, CLIPGeolocationDataset
 from src.models.clip_model import GeoCLIP
+from src.models.resnet_model import GeoResNet
 from warnings import filterwarnings
 
 filterwarnings('ignore', category=UserWarning, module='transformers')
@@ -70,10 +71,13 @@ GEO_TRAIN_ARGS = TrainingArguments(
 )
 
 def get_model(args):
-    if args.model == 'geoclip':
-        return GeoCLIP(args.pretrained_model, use_context=args.with_context)
-    else:
-        raise ValueError(f'Model {args.model} NEEDS TO BE IMPLEMENTED!')
+    match args.model:
+        case 'geoclip':
+            return GeoCLIP(args.pretrained_model, use_context=args.with_context)
+        case _ if 'resnet' in args.model:
+            return GeoResNet(args.model, args.with_context, True)
+        case _:
+            raise ValueError(f'Model {args.model} NEEDS TO BE IMPLEMENTED!')
 
 def main(args):
 

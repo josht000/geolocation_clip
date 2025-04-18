@@ -74,3 +74,18 @@ class AuxiliaryGeo(nn.Module):
             combined_features=combined_features
         )
 
+class LocationCoordinateHead(nn.Module):
+    def __init__(self, input_size, use_auxiliary=False):
+        super(LocationCoordinateHead, self).__init__()
+        self.use_auxiliary = use_auxiliary
+
+        self.mlp = nn.Sequential(
+            nn.Linear(input_size, 256),
+            nn.ReLU(),
+            nn.Linear(256, 128),
+            nn.ReLU(),
+            nn.Linear(128, 2)  # Output: [latitude, longitude]
+        )
+
+    def forward(self, x):
+        return self.mlp(x)
